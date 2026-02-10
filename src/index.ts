@@ -91,3 +91,4 @@ export {
   type OutbreakInfo,
   type GameEvent,
 } from "./orchestrator";
+export { type Bot } from "./bot";
