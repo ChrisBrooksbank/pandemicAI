@@ -1,7 +1,35 @@
 // Infection phase logic including cube placement and outbreak detection
-import { CureStatus, GameStatus, type DiseaseColor, type GameState } from "./types";
+import { CureStatus, GameStatus, Role, type DiseaseColor, type GameState } from "./types";
 import { getInfectionRate } from "./game";
 import { getCity } from "./board";
+
+/**
+ * Check if cube placement should be prevented in a city due to Quarantine Specialist.
+ * The Quarantine Specialist prevents cube placement in their current city and all adjacent cities.
+ *
+ * @param state - The current game state
+ * @param cityName - The name of the city where cube would be placed
+ * @returns true if cube placement should be prevented, false otherwise
+ */
+function isQuarantined(state: GameState, cityName: string): boolean {
+  // Check if any player is a Quarantine Specialist
+  for (const player of state.players) {
+    if (player.role === Role.QuarantineSpecialist) {
+      // Check if the city is the Quarantine Specialist's location
+      if (player.location === cityName) {
+        return true;
+      }
+
+      // Check if the city is adjacent to the Quarantine Specialist's location
+      const qsCity = getCity(player.location);
+      if (qsCity && qsCity.connections.includes(cityName)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 /**
  * Result of executing the infection phase
@@ -46,12 +74,14 @@ interface OutbreakState {
  * @param color - The disease color that is outbreaking
  * @param state - The current outbreak state (modified in place for efficiency)
  * @param cures - The cure status for each disease
+ * @param gameState - The full game state (needed for Quarantine Specialist check)
  */
 function processOutbreak(
   cityName: string,
   color: DiseaseColor,
   state: OutbreakState,
   cures: Record<DiseaseColor, CureStatus>,
+  gameState: GameState,
 ): void {
   // Check if city has already outbroken in this chain
   if (state.outbrokenCities.has(cityName)) {
@@ -80,6 +110,11 @@ function processOutbreak(
   for (const adjacentCityName of city.connections) {
     // Skip if the disease is eradicated
     if (cures[color] === CureStatus.Eradicated) {
+      continue;
+    }
+
+    // Skip if the adjacent city is quarantined by Quarantine Specialist
+    if (isQuarantined(gameState, adjacentCityName)) {
       continue;
     }
 
@@ -116,7 +151,7 @@ function processOutbreak(
     // Check if this would trigger a chain reaction outbreak
     if (currentCubes >= 3) {
       // Chain reaction: adjacent city also outbreaks
-      processOutbreak(adjacentCityName, color, state, cures);
+      processOutbreak(adjacentCityName, color, state, cures, gameState);
 
       // If game was lost during recursion, stop processing
       if (state.status === GameStatus.Lost) {
@@ -177,9 +212,10 @@ export function resolveEpidemic(state: GameState): EpidemicResult {
   let gameStatus = state.status;
   let outbreakCount = state.outbreakCount;
 
-  // Check if disease is eradicated
+  // Check if disease is eradicated or city is quarantined
   const cureStatus = state.cures[bottomCard.color];
-  if (cureStatus !== CureStatus.Eradicated) {
+  const isQuarantinedCity = isQuarantined(state, bottomCard.city);
+  if (cureStatus !== CureStatus.Eradicated && !isQuarantinedCity) {
     // Get the city state (clone it to avoid mutation)
     const cityState = updatedBoard[bottomCard.city];
     if (cityState === undefined) {
@@ -228,7 +264,7 @@ export function resolveEpidemic(state: GameState): EpidemicResult {
           outbrokenCities: new Set<string>(),
         };
 
-        processOutbreak(bottomCard.city, bottomCard.color, outbreakState, state.cures);
+        processOutbreak(bottomCard.city, bottomCard.color, outbreakState, state.cures, state);
 
         gameStatus = outbreakState.status;
         outbreakCount = outbreakState.outbreakCount;
@@ -334,6 +370,12 @@ export function executeInfectionPhase(state: GameState): InfectionPhaseResult {
       continue;
     }
 
+    // Check if city is quarantined by Quarantine Specialist
+    if (isQuarantined(state, card.city)) {
+      // Skip cube placement but card is still drawn and discarded
+      continue;
+    }
+
     // Get the city state (clone it to avoid mutation)
     const cityState = updatedBoard[card.city];
     if (cityState === undefined) {
@@ -364,7 +406,7 @@ export function executeInfectionPhase(state: GameState): InfectionPhaseResult {
         outbrokenCities: new Set<string>(),
       };
 
-      processOutbreak(card.city, card.color, outbreakState, state.cures);
+      processOutbreak(card.city, card.color, outbreakState, state.cures, state);
 
       // Update from outbreak state
       gameStatus = outbreakState.status;

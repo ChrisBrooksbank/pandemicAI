@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { createGame, initializeBoard } from "./game";
 import { executeInfectionPhase, resolveEpidemic } from "./infection";
-import { CureStatus, Disease, GameStatus, type GameState } from "./types";
+import { CureStatus, Disease, GameStatus, Role, type GameState } from "./types";
 
 describe("executeInfectionPhase", () => {
   it("should draw cards equal to infection rate and place 1 cube per card", () => {
@@ -24,6 +24,11 @@ describe("executeInfectionPhase", () => {
       infectionDeck,
       infectionDiscard: [],
       infectionRatePosition: 1, // Rate = 2 cards
+      // Ensure no Quarantine Specialist interferes by setting roles explicitly
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic, // Use any role except Quarantine Specialist
+      })),
       cubeSupply: {
         blue: 24,
         yellow: 24,
@@ -232,6 +237,11 @@ describe("executeInfectionPhase", () => {
       board: boardWithCubes,
       infectionDeck,
       infectionRatePosition: 1, // Rate = 2
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 22, // 2 cubes already on board
         yellow: 24,
@@ -272,6 +282,11 @@ describe("executeInfectionPhase", () => {
       infectionDiscard: [],
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 0,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 21, // 3 cubes already on board
         yellow: 24,
@@ -331,6 +346,11 @@ describe("executeInfectionPhase", () => {
       board: cleanBoard,
       infectionDeck,
       infectionRatePosition: 6, // Rate = 4 cards
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 24,
         yellow: 24,
@@ -384,6 +404,11 @@ describe("Outbreak mechanics", () => {
       infectionDiscard: [],
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 0,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 21,
         yellow: 24,
@@ -443,6 +468,11 @@ describe("Outbreak mechanics", () => {
       infectionDiscard: [],
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 0,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 18, // 6 cubes already on board
         yellow: 24,
@@ -503,6 +533,11 @@ describe("Outbreak mechanics", () => {
       infectionDeck,
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 0,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 15,
         yellow: 24,
@@ -546,6 +581,11 @@ describe("Outbreak mechanics", () => {
       infectionDeck,
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 7, // One more outbreak will lose the game
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 21,
         yellow: 24,
@@ -587,6 +627,11 @@ describe("Outbreak mechanics", () => {
       infectionDeck,
       infectionRatePosition: 1, // Rate = 2
       outbreakCount: 0,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 2, // Only 2 cubes left, but outbreak needs 3 (Chicago, Miami, Washington)
         yellow: 24,
@@ -718,6 +763,11 @@ describe("Epidemic resolution", () => {
       ],
       infectionDiscard: [],
       infectionRatePosition: 1,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 24,
         yellow: 24,
@@ -897,6 +947,11 @@ describe("Epidemic resolution", () => {
       infectionDeck: [{ city: "Atlanta", color: Disease.Blue }],
       infectionDiscard: [],
       infectionRatePosition: 1,
+      // Ensure no Quarantine Specialist interferes
+      players: state.players.map((player) => ({
+        ...player,
+        role: Role.Medic,
+      })),
       cubeSupply: {
         blue: 2, // Only 2 cubes left, but epidemic needs 3
         yellow: 24,
@@ -909,5 +964,304 @@ describe("Epidemic resolution", () => {
 
     // Game should be lost due to cube exhaustion
     expect(result.state.status).toBe(GameStatus.Lost);
+  });
+});
+
+describe("Role: Quarantine Specialist", () => {
+  it("should prevent cube placement in Quarantine Specialist's current city during infection phase", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const player0 = state.players[0];
+    if (!player0) throw new Error("Player 0 not found");
+
+    // Set up infection deck to infect Atlanta (where QS is located)
+    const infectionDeck = [
+      { city: "Atlanta", color: Disease.Blue },
+      { city: "Paris", color: Disease.Blue },
+    ];
+
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck,
+      infectionDiscard: [],
+      infectionRatePosition: 1, // Rate = 2 cards
+      players: [
+        { ...player0, role: Role.QuarantineSpecialist, location: "Atlanta" },
+        state.players[1] || state.players[0],
+      ],
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // Should draw 2 cards
+    expect(result.cardsDrawn).toHaveLength(2);
+
+    // Atlanta should have NO cubes (quarantined)
+    expect(result.state.board["Atlanta"]?.blue).toBe(0);
+
+    // Paris should have 1 cube (not quarantined)
+    expect(result.state.board["Paris"]?.blue).toBe(1);
+
+    // Only 1 cube should be removed from supply (Paris)
+    expect(result.state.cubeSupply.blue).toBe(23);
+  });
+
+  it("should prevent cube placement in cities adjacent to Quarantine Specialist during infection phase", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const player0 = state.players[0];
+    if (!player0) throw new Error("Player 0 not found");
+
+    // Atlanta is connected to: Chicago, Miami, Washington
+    // Set up infection deck to infect Chicago (adjacent to Atlanta)
+    const infectionDeck = [
+      { city: "Chicago", color: Disease.Blue },
+      { city: "Paris", color: Disease.Blue }, // Not adjacent to Atlanta
+    ];
+
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck,
+      infectionDiscard: [],
+      infectionRatePosition: 1, // Rate = 2 cards
+      players: [
+        { ...player0, role: Role.QuarantineSpecialist, location: "Atlanta" },
+        state.players[1] || state.players[0],
+      ],
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // Should draw 2 cards
+    expect(result.cardsDrawn).toHaveLength(2);
+
+    // Chicago should have NO cubes (quarantined - adjacent to Atlanta)
+    expect(result.state.board["Chicago"]?.blue).toBe(0);
+
+    // Paris should have 1 cube (not adjacent to Atlanta)
+    expect(result.state.board["Paris"]?.blue).toBe(1);
+
+    // Only 1 cube should be removed from supply (Paris)
+    expect(result.state.cubeSupply.blue).toBe(23);
+  });
+
+  it("should prevent cube placement during epidemic in quarantined city", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const player0 = state.players[0];
+    if (!player0) throw new Error("Player 0 not found");
+
+    // Set up infection deck with Atlanta at the bottom (epidemic draws from bottom)
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck: [{ city: "Atlanta", color: Disease.Blue }],
+      infectionDiscard: [],
+      infectionRatePosition: 1,
+      players: [
+        { ...player0, role: Role.QuarantineSpecialist, location: "Atlanta" },
+        state.players[1] || state.players[0],
+      ],
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = resolveEpidemic(testState);
+
+    // Infection rate should increase
+    expect(result.state.infectionRatePosition).toBe(2);
+
+    // Atlanta should have NO cubes (quarantined)
+    expect(result.state.board["Atlanta"]?.blue).toBe(0);
+
+    // No cubes should be removed from supply
+    expect(result.state.cubeSupply.blue).toBe(24);
+
+    // Should still intensify (shuffle discard on top)
+    expect(result.state.infectionDiscard).toHaveLength(0);
+  });
+
+  it("should prevent outbreaks from spreading to quarantined cities", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const player0 = state.players[0];
+    if (!player0) throw new Error("Player 0 not found");
+
+    // Set up: San Francisco has 3 blue cubes, QS is in Atlanta
+    // Atlanta connections: ["Chicago", "Miami", "Washington"]
+    // San Francisco connections: ["Chicago", "Los Angeles", "Manila", "Tokyo"]
+    // When San Francisco outbreaks, it should NOT spread to Chicago (quarantined - adjacent to Atlanta)
+    const sfState = cleanBoard["San Francisco"];
+    const atlantaState = cleanBoard["Atlanta"];
+    if (!sfState || !atlantaState) throw new Error("City not found");
+
+    const testState: GameState = {
+      ...state,
+      board: {
+        ...cleanBoard,
+        "San Francisco": { ...sfState, blue: 3 },
+        Atlanta: { ...atlantaState, blue: 0 },
+      },
+      infectionDeck: [
+        { city: "San Francisco", color: Disease.Blue },
+        { city: "Baghdad", color: Disease.Black }, // Different color, won't affect test
+      ],
+      infectionDiscard: [],
+      infectionRatePosition: 1, // Rate = 2 cards
+      players: [
+        { ...player0, role: Role.QuarantineSpecialist, location: "Atlanta" },
+        {
+          ...(state.players[1] || state.players[0]),
+          role: Role.Medic, // Ensure player 1 is not also a QS
+          location: "Miami", // Keep them away from SF
+        },
+      ],
+      cubeSupply: {
+        blue: 21, // 3 already in SF
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+      outbreakCount: 0,
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // San Francisco should still have 3 cubes (outbreak doesn't place 4th cube)
+    expect(result.state.board["San Francisco"]?.blue).toBe(3);
+
+    // Atlanta should have NO cubes (quarantined - QS is here)
+    expect(result.state.board["Atlanta"]?.blue).toBe(0);
+
+    // Chicago should have NO cubes (quarantined - adjacent to Atlanta where QS is)
+    expect(result.state.board["Chicago"]?.blue).toBe(0);
+
+    // Los Angeles, Manila, and Tokyo should get 1 blue cube each (not quarantined)
+    expect(result.state.board["Los Angeles"]?.blue).toBe(1);
+    expect(result.state.board["Manila"]?.blue).toBe(1);
+    expect(result.state.board["Tokyo"]?.blue).toBe(1);
+
+    // Outbreak counter should increment
+    expect(result.state.outbreakCount).toBe(1);
+
+    // 3 cubes placed (LA, Manila, Tokyo), Chicago was quarantined
+    expect(result.state.cubeSupply.blue).toBe(18); // 21 - 3 = 18
+  });
+
+  it("should not prevent cube placement in non-adjacent cities", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const player0 = state.players[0];
+    if (!player0) throw new Error("Player 0 not found");
+
+    // QS is in Atlanta, but Tokyo is far away (not adjacent)
+    const infectionDeck = [
+      { city: "Tokyo", color: Disease.Red },
+      { city: "Seoul", color: Disease.Red },
+    ];
+
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck,
+      infectionDiscard: [],
+      infectionRatePosition: 1, // Rate = 2 cards
+      players: [
+        { ...player0, role: Role.QuarantineSpecialist, location: "Atlanta" },
+        state.players[1] || state.players[0],
+      ],
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // Both Tokyo and Seoul should be infected (not quarantined)
+    expect(result.state.board["Tokyo"]?.red).toBe(1);
+    expect(result.state.board["Seoul"]?.red).toBe(1);
+
+    // 2 cubes should be removed from supply
+    expect(result.state.cubeSupply.red).toBe(22);
+  });
+
+  it("should work with multiple Quarantine Specialists in different locations", () => {
+    const state = createGame({ playerCount: 4, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    // Set up 2 QS in different locations: one in Atlanta, one in London
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck: [
+        { city: "Chicago", color: Disease.Blue }, // Adjacent to Atlanta
+        { city: "Paris", color: Disease.Blue }, // Adjacent to London
+        { city: "Tokyo", color: Disease.Red }, // Not adjacent to either
+      ],
+      infectionDiscard: [],
+      infectionRatePosition: 2, // Rate = 2 cards
+      players: [
+        {
+          role: Role.QuarantineSpecialist,
+          location: "Atlanta",
+          hand: [],
+        },
+        {
+          role: Role.QuarantineSpecialist,
+          location: "London",
+          hand: [],
+        },
+        state.players[2] || state.players[0],
+        state.players[3] || state.players[0],
+      ],
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // Chicago should have NO cubes (quarantined by Atlanta QS)
+    expect(result.state.board["Chicago"]?.blue).toBe(0);
+
+    // Paris should have NO cubes (quarantined by London QS)
+    expect(result.state.board["Paris"]?.blue).toBe(0);
+
+    // Tokyo should have 1 cube (not quarantined) - wait, infection rate is 2, so only 2 cards drawn
+    // Let me check: infectionRatePosition 2 should give rate 2 (positions 1-3 all give rate 2)
+    // But we have 3 cards in the deck, so only first 2 are drawn
+    expect(result.cardsDrawn).toHaveLength(2);
+
+    // No cubes should be removed from supply (both were quarantined)
+    expect(result.state.cubeSupply.blue).toBe(24);
   });
 });

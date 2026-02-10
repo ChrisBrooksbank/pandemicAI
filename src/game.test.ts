@@ -2716,6 +2716,12 @@ describe("drawPlayerCards", () => {
     // Set phase to Draw
     game.phase = TurnPhase.Draw;
 
+    // Ensure no Quarantine Specialist interferes with epidemic test
+    game.players = game.players.map((player) => ({
+      ...player,
+      role: Role.Medic,
+    }));
+
     // Setup known infection deck for epidemic resolution
     const cleanBoard = initializeBoard();
     game.board = cleanBoard;
