@@ -1224,12 +1224,19 @@ describe("getCurrentPlayer", () => {
 });
 
 describe("getAvailableActions", () => {
-  it("should return an empty array (placeholder implementation)", () => {
+  it("should return available actions during action phase", () => {
     const game = createGame({ playerCount: 2, difficulty: 4 });
 
     const actions = getAvailableActions(game);
 
-    expect(actions).toEqual([]);
+    // Should have some actions available
+    expect(Array.isArray(actions)).toBe(true);
+    expect(actions.length).toBeGreaterThan(0);
+
+    // Should have drive-ferry actions to connected cities (Atlanta connects to Chicago, Miami, Washington)
+    expect(actions).toContain("drive-ferry:Chicago");
+    expect(actions).toContain("drive-ferry:Miami");
+    expect(actions).toContain("drive-ferry:Washington");
   });
 
   it("should return an array type", () => {
@@ -1245,9 +1252,14 @@ describe("getAvailableActions", () => {
     const game3 = createGame({ playerCount: 3, difficulty: 5 });
     const game4 = createGame({ playerCount: 4, difficulty: 6 });
 
-    expect(getAvailableActions(game2)).toEqual([]);
-    expect(getAvailableActions(game3)).toEqual([]);
-    expect(getAvailableActions(game4)).toEqual([]);
+    const actions2 = getAvailableActions(game2);
+    const actions3 = getAvailableActions(game3);
+    const actions4 = getAvailableActions(game4);
+
+    // All should return some actions
+    expect(actions2.length).toBeGreaterThan(0);
+    expect(actions3.length).toBeGreaterThan(0);
+    expect(actions4.length).toBeGreaterThan(0);
   });
 
   it("should work regardless of current player", () => {
@@ -1255,13 +1267,16 @@ describe("getAvailableActions", () => {
 
     // Test with different player indices
     game.currentPlayerIndex = 0;
-    expect(getAvailableActions(game)).toEqual([]);
+    const actions0 = getAvailableActions(game);
+    expect(actions0.length).toBeGreaterThan(0);
 
     game.currentPlayerIndex = 1;
-    expect(getAvailableActions(game)).toEqual([]);
+    const actions1 = getAvailableActions(game);
+    expect(actions1.length).toBeGreaterThan(0);
 
     game.currentPlayerIndex = 2;
-    expect(getAvailableActions(game)).toEqual([]);
+    const actions2 = getAvailableActions(game);
+    expect(actions2.length).toBeGreaterThan(0);
   });
 
   it("should return a new array on each call", () => {
@@ -1273,6 +1288,139 @@ describe("getAvailableActions", () => {
     // Should be equal but not the same reference
     expect(actions1).toEqual(actions2);
     expect(actions1).not.toBe(actions2);
+  });
+
+  it("should return empty array when not in action phase", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Change phase to Draw
+    game.phase = "draw" as TurnPhase;
+
+    const actions = getAvailableActions(game);
+    expect(actions).toEqual([]);
+  });
+
+  it("should return empty array when game has ended", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // End the game
+    game.status = "won" as GameStatus;
+
+    const actions = getAvailableActions(game);
+    expect(actions).toEqual([]);
+  });
+
+  it("should return empty array when no actions remaining", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Set actions remaining to 0
+    game.actionsRemaining = 0;
+
+    const actions = getAvailableActions(game);
+    expect(actions).toEqual([]);
+  });
+
+  it("should include direct flight actions for cards in hand", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+    const currentPlayer = getCurrentPlayer(game);
+
+    // Find a city card in hand
+    const cityCard = currentPlayer.hand.find((card) => card.type === "city");
+    expect(cityCard).toBeDefined();
+
+    if (cityCard && cityCard.type === "city") {
+      const actions = getAvailableActions(game);
+      expect(actions).toContain(`direct-flight:${cityCard.city}`);
+    }
+  });
+
+  it("should include charter flight when player has current city card", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+    const currentPlayer = getCurrentPlayer(game);
+
+    // Add Atlanta card to hand (current location)
+    currentPlayer.hand.push({ type: "city", city: "Atlanta", color: "blue" as Disease });
+
+    const actions = getAvailableActions(game);
+
+    // Should have charter flights to many cities
+    const charterActions = actions.filter((a) => a.startsWith("charter-flight:"));
+    expect(charterActions.length).toBeGreaterThan(0);
+    expect(charterActions).toContain("charter-flight:Paris");
+  });
+
+  it("should include treat disease actions when cubes present", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Add some disease cubes to Atlanta
+    const atlantaState = game.board["Atlanta"];
+    if (atlantaState) {
+      game.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 2,
+        yellow: 1,
+      };
+    }
+
+    const actions = getAvailableActions(game);
+
+    expect(actions).toContain("treat:blue");
+    expect(actions).toContain("treat:yellow");
+    expect(actions).not.toContain("treat:black"); // No black cubes
+  });
+
+  it("should include build research station when player has city card", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Remove Atlanta's research station
+    const atlantaState = game.board["Atlanta"];
+    if (atlantaState) {
+      game.board["Atlanta"] = {
+        ...atlantaState,
+        hasResearchStation: false,
+      };
+    }
+
+    // Add Atlanta card to hand
+    const currentPlayer = getCurrentPlayer(game);
+    currentPlayer.hand.push({ type: "city", city: "Atlanta", color: "blue" as Disease });
+
+    const actions = getAvailableActions(game);
+
+    expect(actions).toContain("build-research-station");
+  });
+
+  it("should include share knowledge when players in same location", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Both players start in Atlanta, so share actions should be available
+    const currentPlayer = getCurrentPlayer(game);
+
+    // Add Atlanta card to current player's hand
+    currentPlayer.hand.push({ type: "city", city: "Atlanta", color: "blue" as Disease });
+
+    const actions = getAvailableActions(game);
+
+    // Should have share-give action (give Atlanta card to player 1)
+    expect(actions).toContain("share-give:1:Atlanta");
+  });
+
+  it("should include discover cure when at research station with enough cards", () => {
+    const game = createGame({ playerCount: 2, difficulty: 4 });
+    const currentPlayer = getCurrentPlayer(game);
+
+    // Add 5 blue city cards
+    currentPlayer.hand = [
+      { type: "city", city: "Atlanta", color: "blue" as Disease },
+      { type: "city", city: "Chicago", color: "blue" as Disease },
+      { type: "city", city: "Washington", color: "blue" as Disease },
+      { type: "city", city: "Montreal", color: "blue" as Disease },
+      { type: "city", city: "New York", color: "blue" as Disease },
+    ];
+
+    const actions = getAvailableActions(game);
+
+    expect(actions).toContain("discover-cure:blue");
   });
 });
 

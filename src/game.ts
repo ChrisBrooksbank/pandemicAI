@@ -1,5 +1,5 @@
 // Game initialization and state management
-import { CITIES } from "./board";
+import { CITIES, getCity } from "./board";
 import {
   CureStatus,
   Disease,
@@ -8,6 +8,7 @@ import {
   Role,
   TurnPhase,
   type CityState,
+  type DiseaseColor,
   type GameConfig,
   type GameState,
   type InfectionCard,
@@ -397,14 +398,284 @@ export function getCurrentPlayer(state: GameState): Player {
 
 /**
  * Get the available actions for the current player.
- * Returns an empty array for now (action logic not yet implemented).
+ * Returns an array of action descriptions that are currently valid.
  *
- * @param _state - The current game state
- * @returns Array of available actions (currently empty)
+ * Action format examples:
+ * - "drive-ferry:Paris"
+ * - "direct-flight:Tokyo"
+ * - "charter-flight:London"
+ * - "shuttle-flight:Atlanta"
+ * - "build-research-station"
+ * - "treat:blue"
+ * - "share-give:1:Paris" (give Paris card to player 1)
+ * - "share-take:1:Paris" (take Paris card from player 1)
+ * - "discover-cure:blue"
+ * - "dispatcher-move-to-pawn:1:2" (move player 1 to player 2's location)
+ * - "dispatcher-move-other:1:drive:Paris" (move player 1 via drive to Paris)
+ * - "ops-expert-move:Paris:Tokyo" (move to Paris using Tokyo card)
+ * - "contingency-planner-take:airlift"
+ * - "event:airlift:1:Paris" (airlift player 1 to Paris)
+ *
+ * @param state - The current game state
+ * @returns Array of available action descriptions
  */
-export function getAvailableActions(_state: GameState): string[] {
-  // Placeholder implementation - will return actual available actions once action system is implemented
-  return [];
+export function getAvailableActions(state: GameState): string[] {
+  const actions: string[] = [];
+
+  // Can only take actions during the Actions phase of an ongoing game
+  if (state.status !== GameStatus.Ongoing || state.phase !== TurnPhase.Actions) {
+    return actions;
+  }
+
+  // Cannot take actions if no actions remaining
+  if (state.actionsRemaining <= 0) {
+    return actions;
+  }
+
+  const currentPlayer = getCurrentPlayer(state);
+  const currentLocation = currentPlayer.location;
+  const currentCity = getCity(currentLocation);
+
+  if (!currentCity) {
+    return actions;
+  }
+
+  const currentCityState = state.board[currentLocation];
+  if (!currentCityState) {
+    return actions;
+  }
+
+  // 1. Drive/Ferry actions - move to adjacent cities
+  for (const connectedCity of currentCity.connections) {
+    actions.push(`drive-ferry:${connectedCity}`);
+  }
+
+  // 2. Direct Flight - discard city card to move to that city
+  for (const card of currentPlayer.hand) {
+    if (card.type === "city") {
+      actions.push(`direct-flight:${card.city}`);
+    }
+  }
+
+  // 3. Charter Flight - discard current city card to move anywhere
+  const hasCurrentCityCard = currentPlayer.hand.some(
+    (card) => card.type === "city" && card.city === currentLocation,
+  );
+  if (hasCurrentCityCard) {
+    // Can move to any city
+    for (const city of CITIES) {
+      if (city.name !== currentLocation) {
+        actions.push(`charter-flight:${city.name}`);
+      }
+    }
+  }
+
+  // 4. Shuttle Flight - move between research stations
+  if (currentCityState.hasResearchStation) {
+    for (const cityName in state.board) {
+      const cityState = state.board[cityName];
+      if (cityState && cityState.hasResearchStation && cityName !== currentLocation) {
+        actions.push(`shuttle-flight:${cityName}`);
+      }
+    }
+  }
+
+  // 5. Build Research Station
+  if (!currentCityState.hasResearchStation) {
+    const hasRequiredCard =
+      currentPlayer.role === Role.OperationsExpert ||
+      currentPlayer.hand.some((card) => card.type === "city" && card.city === currentLocation);
+
+    if (hasRequiredCard) {
+      // Count existing stations
+      const existingStations = Object.values(state.board).filter(
+        (cityState) => cityState.hasResearchStation,
+      ).length;
+
+      if (existingStations < 6) {
+        actions.push("build-research-station");
+      } else {
+        // Need to specify which station to remove
+        for (const cityName in state.board) {
+          const cityState = state.board[cityName];
+          if (cityState && cityState.hasResearchStation) {
+            actions.push(`build-research-station:${cityName}`);
+          }
+        }
+      }
+    }
+  }
+
+  // 6. Treat Disease - remove cubes from current city
+  const colors: DiseaseColor[] = [Disease.Blue, Disease.Yellow, Disease.Black, Disease.Red];
+  for (const color of colors) {
+    if (currentCityState[color] > 0) {
+      actions.push(`treat:${color}`);
+    }
+  }
+
+  // 7. Share Knowledge - give or take cards with players in same location
+  for (let i = 0; i < state.players.length; i++) {
+    if (i === state.currentPlayerIndex) continue;
+
+    const otherPlayer = state.players[i];
+    if (!otherPlayer) continue;
+
+    if (otherPlayer.location === currentLocation) {
+      // Can give current city card, or any card if Researcher
+      if (currentPlayer.role === Role.Researcher) {
+        // Researcher can give any city card
+        for (const card of currentPlayer.hand) {
+          if (card.type === "city" && otherPlayer.hand.length < 7) {
+            actions.push(`share-give:${i}:${card.city}`);
+          }
+        }
+      } else {
+        // Normal: can only give matching city card
+        const hasMatchingCard = currentPlayer.hand.some(
+          (card) => card.type === "city" && card.city === currentLocation,
+        );
+        if (hasMatchingCard && otherPlayer.hand.length < 7) {
+          actions.push(`share-give:${i}:${currentLocation}`);
+        }
+      }
+
+      // Can take matching city card from other player
+      const otherHasMatchingCard = otherPlayer.hand.some(
+        (card) => card.type === "city" && card.city === currentLocation,
+      );
+      if (otherHasMatchingCard && currentPlayer.hand.length < 7) {
+        actions.push(`share-take:${i}:${currentLocation}`);
+      }
+    }
+  }
+
+  // 8. Discover Cure - at research station, discard 5 (or 4 for Scientist) same-color cards
+  if (currentCityState.hasResearchStation) {
+    const cardsNeeded = currentPlayer.role === Role.Scientist ? 4 : 5;
+
+    for (const color of colors) {
+      const cureStatus = state.cures[color];
+      if (cureStatus === CureStatus.Uncured) {
+        const cityCardsOfColor = currentPlayer.hand.filter(
+          (card) => card.type === "city" && card.color === color,
+        );
+        if (cityCardsOfColor.length >= cardsNeeded) {
+          actions.push(`discover-cure:${color}`);
+        }
+      }
+    }
+  }
+
+  // 9. Dispatcher special actions
+  if (currentPlayer.role === Role.Dispatcher) {
+    // Move any pawn to another pawn's location
+    for (let i = 0; i < state.players.length; i++) {
+      if (i === state.currentPlayerIndex) continue;
+      for (let j = 0; j < state.players.length; j++) {
+        if (j === i) continue;
+        actions.push(`dispatcher-move-to-pawn:${i}:${j}`);
+      }
+    }
+
+    // Move other players using standard movement
+    for (let i = 0; i < state.players.length; i++) {
+      if (i === state.currentPlayerIndex) continue;
+
+      const playerToMove = state.players[i];
+      if (!playerToMove) continue;
+
+      const playerLocation = playerToMove.location;
+      const playerCity = getCity(playerLocation);
+      if (!playerCity) continue;
+
+      const playerCityState = state.board[playerLocation];
+      if (!playerCityState) continue;
+
+      // Drive/Ferry for other player
+      for (const connectedCity of playerCity.connections) {
+        actions.push(`dispatcher-move-other:${i}:drive:${connectedCity}`);
+      }
+
+      // Direct Flight (can use Dispatcher's or player's cards)
+      for (const card of currentPlayer.hand) {
+        if (card.type === "city") {
+          actions.push(`dispatcher-move-other:${i}:direct:${card.city}:dispatcher-card`);
+        }
+      }
+      for (const card of playerToMove.hand) {
+        if (card.type === "city") {
+          actions.push(`dispatcher-move-other:${i}:direct:${card.city}:player-card`);
+        }
+      }
+
+      // Charter Flight (can use Dispatcher's or player's cards)
+      const dispatcherHasPlayerLocationCard = currentPlayer.hand.some(
+        (card) => card.type === "city" && card.city === playerLocation,
+      );
+      const playerHasOwnLocationCard = playerToMove.hand.some(
+        (card) => card.type === "city" && card.city === playerLocation,
+      );
+
+      if (dispatcherHasPlayerLocationCard) {
+        for (const city of CITIES) {
+          if (city.name !== playerLocation) {
+            actions.push(`dispatcher-move-other:${i}:charter:${city.name}:dispatcher-card`);
+          }
+        }
+      }
+      if (playerHasOwnLocationCard) {
+        for (const city of CITIES) {
+          if (city.name !== playerLocation) {
+            actions.push(`dispatcher-move-other:${i}:charter:${city.name}:player-card`);
+          }
+        }
+      }
+
+      // Shuttle Flight for other player
+      if (playerCityState.hasResearchStation) {
+        for (const cityName in state.board) {
+          const cityState = state.board[cityName];
+          if (cityState && cityState.hasResearchStation && cityName !== playerLocation) {
+            actions.push(`dispatcher-move-other:${i}:shuttle:${cityName}`);
+          }
+        }
+      }
+    }
+  }
+
+  // 10. Operations Expert special move
+  if (
+    currentPlayer.role === Role.OperationsExpert &&
+    !state.operationsExpertSpecialMoveUsed &&
+    currentCityState.hasResearchStation
+  ) {
+    // Can discard any city card to move anywhere
+    for (const card of currentPlayer.hand) {
+      if (card.type === "city") {
+        for (const city of CITIES) {
+          if (city.name !== currentLocation) {
+            actions.push(`ops-expert-move:${city.name}:${card.city}`);
+          }
+        }
+      }
+    }
+  }
+
+  // 11. Contingency Planner - take event from discard
+  if (currentPlayer.role === Role.ContingencyPlanner && !currentPlayer.storedEventCard) {
+    const eventTypesInDiscard = new Set<EventType>();
+    for (const card of state.playerDiscard) {
+      if (card.type === "event") {
+        eventTypesInDiscard.add(card.event);
+      }
+    }
+    for (const eventType of eventTypesInDiscard) {
+      actions.push(`contingency-planner-take:${eventType}`);
+    }
+  }
+
+  return actions;
 }
 
 /**
