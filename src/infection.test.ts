@@ -1264,4 +1264,46 @@ describe("Role: Quarantine Specialist", () => {
     // No cubes should be removed from supply (both were quarantined)
     expect(result.state.cubeSupply.blue).toBe(24);
   });
+
+  it("should skip infection phase when skipNextInfectionPhase is true", () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const cleanBoard = initializeBoard();
+
+    const testState: GameState = {
+      ...state,
+      board: cleanBoard,
+      infectionDeck: [
+        { city: "Atlanta", color: Disease.Blue },
+        { city: "Chicago", color: Disease.Blue },
+      ],
+      infectionDiscard: [],
+      infectionRatePosition: 1, // Rate = 2 cards
+      skipNextInfectionPhase: true, // One Quiet Night effect
+      cubeSupply: {
+        blue: 24,
+        yellow: 24,
+        black: 24,
+        red: 24,
+      },
+    };
+
+    const result = executeInfectionPhase(testState);
+
+    // No cards should be drawn
+    expect(result.cardsDrawn).toHaveLength(0);
+
+    // Flag should be cleared after skipping
+    expect(result.state.skipNextInfectionPhase).toBe(false);
+
+    // Board should be unchanged (no cubes placed)
+    expect(result.state.board["Atlanta"]?.blue).toBe(0);
+    expect(result.state.board["Chicago"]?.blue).toBe(0);
+
+    // Infection deck should be unchanged (no cards drawn)
+    expect(result.state.infectionDeck).toHaveLength(2);
+    expect(result.state.infectionDiscard).toHaveLength(0);
+
+    // Cube supply should be unchanged
+    expect(result.state.cubeSupply.blue).toBe(24);
+  });
 });

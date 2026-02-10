@@ -3441,6 +3441,7 @@ describe("Operations Expert Role Abilities", () => {
         phase: TurnPhase.Actions,
         actionsRemaining: 4,
         operationsExpertSpecialMoveUsed: false,
+        skipNextInfectionPhase: false,
       };
 
       // Add London card for second move

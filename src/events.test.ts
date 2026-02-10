@@ -1,6 +1,6 @@
 // Tests for event card functionality
 import { describe, it, expect } from "vitest";
-import { playEventCard, hasEventCard, airlift, governmentGrant } from "./events";
+import { playEventCard, hasEventCard, airlift, governmentGrant, oneQuietNight } from "./events";
 import {
   Disease,
   EventType,
@@ -112,6 +112,7 @@ describe("Event Card Playability", () => {
     infectionDiscard: [],
     status: GameStatus.Ongoing,
     operationsExpertSpecialMoveUsed: false,
+    skipNextInfectionPhase: false,
   });
 
   describe("playEventCard", () => {
@@ -926,6 +927,205 @@ describe("Event Card Playability", () => {
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error).toContain("does not have");
+      }
+    });
+  });
+
+  describe("oneQuietNight", () => {
+    it("should set skipNextInfectionPhase flag to true", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.OneQuietNight }],
+          },
+          player1,
+        ],
+      };
+
+      const result = oneQuietNight(stateWithEvent);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Flag should be set to skip next infection phase
+        expect(result.state.skipNextInfectionPhase).toBe(true);
+        // Event card should be removed from hand
+        expect(result.state.players[0]?.hand).toHaveLength(0);
+        // Event card should be in discard pile
+        expect(result.state.playerDiscard).toHaveLength(1);
+        expect(result.state.playerDiscard[0]).toEqual({
+          type: "event",
+          event: EventType.OneQuietNight,
+        });
+      }
+    });
+
+    it("should work during any turn phase", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.OneQuietNight }],
+          },
+          player1,
+        ],
+      };
+
+      // Test during draw phase
+      const drawPhaseState = { ...stateWithEvent, phase: TurnPhase.Draw };
+      const drawResult = oneQuietNight(drawPhaseState);
+      expect(drawResult.success).toBe(true);
+      if (drawResult.success) {
+        expect(drawResult.state.skipNextInfectionPhase).toBe(true);
+      }
+
+      // Test during infect phase
+      const infectPhaseState = { ...stateWithEvent, phase: TurnPhase.Infect };
+      const infectResult = oneQuietNight(infectPhaseState);
+      expect(infectResult.success).toBe(true);
+      if (infectResult.success) {
+        expect(infectResult.state.skipNextInfectionPhase).toBe(true);
+      }
+    });
+
+    it("should not cost an action", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.OneQuietNight }],
+          },
+          player1,
+        ],
+      };
+
+      const result = oneQuietNight(stateWithEvent);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Actions remaining should be unchanged
+        expect(result.state.actionsRemaining).toBe(4);
+      }
+    });
+
+    it("should fail if player doesn't have the event card", () => {
+      const state = createTestGameState();
+      const result = oneQuietNight(state);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("does not have");
+      }
+    });
+
+    it("should fail if game is not ongoing", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const wonState: GameState = {
+        ...state,
+        status: GameStatus.Won,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.OneQuietNight }],
+          },
+          player1,
+        ],
+      };
+
+      const result = oneQuietNight(wonState);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("game has ended");
+      }
+    });
+
+    it("should allow a different player to play the event", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+          },
+          {
+            ...player1,
+            hand: [{ type: "event", event: EventType.OneQuietNight }],
+          },
+        ],
+      };
+
+      const result = oneQuietNight(stateWithEvent, 1);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Flag should be set
+        expect(result.state.skipNextInfectionPhase).toBe(true);
+        // Player 1's hand should have the event removed
+        expect(result.state.players[1]?.hand).toHaveLength(0);
+      }
+    });
+
+    it("should work with stored event from Contingency Planner", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const stateWithStored: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            role: Role.ContingencyPlanner,
+            hand: [],
+            storedEventCard: eventCard,
+          },
+          player1,
+        ],
+      };
+
+      const result = oneQuietNight(stateWithStored);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Flag should be set
+        expect(result.state.skipNextInfectionPhase).toBe(true);
+        // Stored event should be cleared
+        expect(result.state.players[0]?.storedEventCard).toBeUndefined();
+        // Stored event should NOT go to discard (removed from game)
+        expect(result.state.playerDiscard).toHaveLength(0);
       }
     });
   });

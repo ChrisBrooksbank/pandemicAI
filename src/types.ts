@@ -226,4 +226,7 @@ export interface GameState {
 
   /** Track if Operations Expert has used special move this turn */
   operationsExpertSpecialMoveUsed: boolean;
+
+  /** Track if the next infection phase should be skipped (One Quiet Night event) */
+  skipNextInfectionPhase: boolean;
 }

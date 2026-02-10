@@ -375,6 +375,7 @@ export function createGame(config: GameConfig): GameState {
     infectionDiscard: infectionResult.infectionDiscard,
     status: GameStatus.Ongoing,
     operationsExpertSpecialMoveUsed: false,
+    skipNextInfectionPhase: false,
   };
 
   return gameState;
@@ -523,6 +524,7 @@ export function advancePhase(state: GameState): GameState {
         currentPlayerIndex: nextPlayerIndex,
         actionsRemaining: 4,
         operationsExpertSpecialMoveUsed: false,
+        skipNextInfectionPhase: false,
       };
     }
 

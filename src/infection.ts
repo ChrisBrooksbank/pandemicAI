@@ -337,6 +337,18 @@ export function resolveEpidemic(state: GameState): EpidemicResult {
  * @throws Error if infection deck doesn't have enough cards
  */
 export function executeInfectionPhase(state: GameState): InfectionPhaseResult {
+  // Check if the infection phase should be skipped (One Quiet Night event)
+  if (state.skipNextInfectionPhase) {
+    // Skip the infection phase but clear the flag
+    return {
+      state: {
+        ...state,
+        skipNextInfectionPhase: false,
+      },
+      cardsDrawn: [],
+    };
+  }
+
   // Get the current infection rate
   const rate = getInfectionRate(state.infectionRatePosition);
 

@@ -297,3 +297,28 @@ export function governmentGrant(
     },
   };
 }
+
+/**
+ * Play the One Quiet Night event card.
+ * Skip the next Infect Cities phase entirely.
+ *
+ * @param state - The current game state
+ * @param eventPlayerIndex - Index of the player playing the event (defaults to current player)
+ * @returns EventResult with updated state or error message
+ */
+export function oneQuietNight(state: GameState, eventPlayerIndex?: number): EventResult {
+  // First, play the event card (handles validation and card removal)
+  const playResult = playEventCard(state, EventType.OneQuietNight, eventPlayerIndex);
+  if (!playResult.success) {
+    return playResult;
+  }
+
+  // Set the flag to skip the next infection phase
+  return {
+    success: true,
+    state: {
+      ...playResult.state,
+      skipNextInfectionPhase: true,
+    },
+  };
+}
