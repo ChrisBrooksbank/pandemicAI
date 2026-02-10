@@ -9,14 +9,15 @@ describe("Dispatcher role abilities", () => {
   function createDispatcherGame(): GameState {
     const state = createGame({ playerCount: 3, difficulty: 4 });
 
-    // Assign roles: Dispatcher (player 0), Medic (player 1), Scientist (player 2)
+    // Assign roles and clear hands for deterministic tests
+    // Dispatcher (player 0), Medic (player 1), Scientist (player 2)
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, role: Role.Dispatcher, location: "Atlanta" };
+        return { ...player, role: Role.Dispatcher, location: "Atlanta", hand: [] };
       } else if (index === 1) {
-        return { ...player, role: Role.Medic, location: "Chicago" };
+        return { ...player, role: Role.Medic, location: "Chicago", hand: [] };
       } else {
-        return { ...player, role: Role.Scientist, location: "Miami" };
+        return { ...player, role: Role.Scientist, location: "Miami", hand: [] };
       }
     });
 
@@ -213,16 +214,7 @@ describe("Dispatcher role abilities", () => {
     });
 
     it("should fail if required card is not in hand", () => {
-      let state = createDispatcherGame();
-
-      // Clear Player 1's hand to ensure they don't have Miami card (prevent flaky test)
-      const updatedPlayers = state.players.map((player, index) => {
-        if (index === 1) {
-          return { ...player, hand: [] };
-        }
-        return player;
-      });
-      state = { ...state, players: updatedPlayers };
+      const state = createDispatcherGame();
 
       // Try to move Player 1 to Miami without having Miami card
       const result = dispatcherMoveOtherPlayer(state, 1, "direct", "Miami", true);

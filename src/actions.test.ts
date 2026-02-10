@@ -179,10 +179,10 @@ describe("directFlight", () => {
     cards: CityCard[] = [],
   ): GameState {
     const state = createGame({ playerCount: 2, difficulty: 4 });
-    // Update the current player with the specified location and cards
+    // Update the current player with the specified location, cards, and deterministic role
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, location, hand: cards };
+        return { ...player, role: Role.Medic, location, hand: cards };
       }
       return player;
     });
@@ -377,10 +377,10 @@ describe("charterFlight", () => {
     cards: CityCard[] = [],
   ): GameState {
     const state = createGame({ playerCount: 2, difficulty: 4 });
-    // Update the current player with the specified location and cards
+    // Update the current player with the specified location, cards, and deterministic role
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, location, hand: cards };
+        return { ...player, role: Role.Medic, location, hand: cards };
       }
       return player;
     });
@@ -1150,10 +1150,11 @@ describe("buildResearchStation", () => {
     cards: CityCard[] = [],
   ): GameState {
     const state = createGame({ playerCount: 2, difficulty: 4 });
-    // Update the current player with the specified location and cards
+    // Update the current player with the specified location, cards, and non-Operations Expert role
+    // Use Medic role by default to avoid Operations Expert's special building ability
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, location, hand: cards };
+        return { ...player, role: Role.Medic, location, hand: cards };
       }
       return player;
     });
@@ -2666,6 +2667,7 @@ describe("Integration: Win/Loss Scenarios", () => {
       players: [
         {
           ...player0,
+          role: Role.Researcher, // Set deterministic role (not Scientist/Medic)
           location: "Atlanta",
           hand: [
             { type: "city", city: "Atlanta", color: Disease.Blue },
@@ -2723,6 +2725,7 @@ describe("Integration: Win/Loss Scenarios", () => {
       players: [
         {
           ...player0,
+          role: Role.Researcher, // Set deterministic role (not Scientist/Medic)
           location: "Atlanta",
           hand: [
             { type: "city", city: "Atlanta", color: Disease.Blue },
@@ -2732,7 +2735,7 @@ describe("Integration: Win/Loss Scenarios", () => {
             { type: "city", city: "Milan", color: Disease.Blue },
           ],
         },
-        player1,
+        { ...player1, role: Role.QuarantineSpecialist }, // Set deterministic role
       ],
       cures: {
         [Disease.Yellow]: CureStatus.Eradicated,
@@ -2778,6 +2781,7 @@ describe("Integration: Win/Loss Scenarios", () => {
       players: [
         {
           ...player0,
+          role: Role.Researcher, // Set deterministic role (not Scientist/Medic)
           location: "Atlanta",
           hand: [
             { type: "city", city: "Atlanta", color: Disease.Blue },
@@ -3248,10 +3252,10 @@ describe("Role: Researcher", () => {
 describe("Operations Expert Role Abilities", () => {
   function createTestGameWithRole(role: Role, location: string = "Atlanta"): GameState {
     const state = createGame({ playerCount: 2, difficulty: 4 });
-    // Set player role and location
+    // Set player role, location, and clear hand for deterministic tests
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, role, location };
+        return { ...player, role, location, hand: [] };
       }
       return player;
     });
@@ -3549,10 +3553,10 @@ describe("Operations Expert Role Abilities", () => {
 describe("Contingency Planner Role Abilities", () => {
   function createTestGameWithRole(role: Role, location: string = "Atlanta"): GameState {
     const state = createGame({ playerCount: 2, difficulty: 4 });
-    // Set player role and location
+    // Set player role, location, and clear hand for deterministic tests
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
-        return { ...player, role, location };
+        return { ...player, role, location, hand: [] };
       }
       return player;
     });
