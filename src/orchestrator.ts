@@ -5,6 +5,7 @@ import {
   getGameStatus,
   getAvailableActions,
   drawPlayerCards,
+  advancePhase,
   type DrawCardsResult,
 } from "./game";
 import { executeInfectionPhase, type InfectionPhaseResult } from "./infection";
@@ -414,6 +415,11 @@ export class OrchestratedGame {
     const needsDiscard = updatedPlayer.hand.length > 7;
     const playersNeedingDiscard = needsDiscard ? [this.gameState.currentPlayerIndex] : [];
 
+    // Auto-advance to Infect phase if no discards needed and game is still ongoing
+    if (!needsDiscard && gameStatus === GameStatus.Ongoing) {
+      this.gameState = advancePhase(this.gameState);
+    }
+
     return {
       state: this.gameState,
       gameStatus,
@@ -509,6 +515,11 @@ export class OrchestratedGame {
 
     // Calculate cubes placed by comparing cube supplies
     const cubesPlaced = citiesInfected.length; // Simplified: 1 cube per card drawn
+
+    // Auto-advance to next player's Actions phase only if game is still ongoing
+    if (gameStatus === GameStatus.Ongoing) {
+      this.gameState = advancePhase(this.gameState);
+    }
 
     return {
       state: this.gameState,
@@ -717,6 +728,11 @@ export class OrchestratedGame {
 
     // Get the updated game status
     const gameStatus = getGameStatus(this.gameState);
+
+    // Auto-advance to Draw phase if no actions remaining and game is still ongoing
+    if (this.gameState.actionsRemaining === 0 && gameStatus === GameStatus.Ongoing) {
+      this.gameState = advancePhase(this.gameState);
+    }
 
     // Return the outcome
     return {

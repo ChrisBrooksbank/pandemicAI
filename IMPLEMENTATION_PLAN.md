@@ -136,7 +136,7 @@
 - [x] Implement performAction() with ActionOutcome discriminated union type
 - [x] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
 - [x] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
-- [ ] Implement phase auto-advancement (Actions→Draw→Infect→next player)
+- [x] Implement phase auto-advancement (Actions→Draw→Infect→next player)
 - [ ] Implement playEvent() for event cards playable during any phase
 - [ ] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
 - [ ] Add error types (InvalidPhaseError, InvalidActionError, GameOverError)

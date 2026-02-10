@@ -613,10 +613,16 @@ describe("OrchestratedGame.drawCards", () => {
         { type: "city", city: "Washington", color: Disease.Blue },
       ];
 
+      // Ensure the deck has 2 city cards (not epidemics)
+      const card1: CityCard = { type: "city", city: "Paris", color: Disease.Blue };
+      const card2: CityCard = { type: "city", city: "London", color: Disease.Blue };
+      const playerDeck = [card1, card2, ...state.playerDeck.slice(2)];
+
       const drawPhaseState: GameState = {
         ...state,
         phase: TurnPhase.Draw,
         players: state.players.map((p, i) => (i === 0 ? { ...p, hand: fiveCards } : p)),
+        playerDeck,
       };
       (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
 
@@ -624,7 +630,11 @@ describe("OrchestratedGame.drawCards", () => {
 
       expect(outcome.needsDiscard).toBe(false);
       expect(outcome.playersNeedingDiscard).toHaveLength(0);
-      expect(game.getCurrentPlayer().hand.length).toBe(7);
+      // Hand should have 7 cards (check outcome state, not game state which has advanced to Infect phase)
+      const playerInOutcome = outcome.state.players[0];
+      if (playerInOutcome) {
+        expect(playerInOutcome.hand.length).toBe(7);
+      }
     });
   });
 
@@ -1030,6 +1040,216 @@ describe("OrchestratedGame.infectCities", () => {
 
       // Blue cube supply should not have changed
       expect(outcome.state.cubeSupply[Disease.Blue]).toBe(initialBlueSupply);
+    });
+  });
+});
+
+describe("Phase auto-advancement", () => {
+  describe("Actions -> Draw transition", () => {
+    it("auto-advances to Draw phase when actions reach 0", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Perform 4 actions by moving back and forth between two cities
+      const atlanta = getCity("Atlanta");
+      const firstConnection = atlanta.connections[0];
+
+      if (!firstConnection) {
+        throw new Error("Atlanta must have at least one connection");
+      }
+
+      // Move to firstConnection, back to Atlanta, to firstConnection, back to Atlanta
+      game.performAction(`drive-ferry:${firstConnection}`);
+      expect(game.getActionsRemaining()).toBe(3);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      game.performAction(`drive-ferry:Atlanta`);
+      expect(game.getActionsRemaining()).toBe(2);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      game.performAction(`drive-ferry:${firstConnection}`);
+      expect(game.getActionsRemaining()).toBe(1);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      // Perform the 4th action - should auto-advance to Draw phase
+      const outcome = game.performAction(`drive-ferry:Atlanta`);
+      expect(outcome.actionsRemaining).toBe(0);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
+    });
+
+    it("does not advance if actions remain", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const atlanta = getCity("Atlanta");
+      const firstConnection = atlanta.connections[0];
+
+      if (!firstConnection) {
+        throw new Error("Atlanta must have at least one connection");
+      }
+
+      // Perform 1 action
+      game.performAction(`drive-ferry:${firstConnection}`);
+
+      // Should still be in Actions phase
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getActionsRemaining()).toBe(3);
+    });
+  });
+
+  describe("Draw -> Infect transition", () => {
+    it("auto-advances to Infect phase when no discards needed", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Draw phase
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      // Draw cards (should not exceed hand limit)
+      const outcome = game.drawCards();
+
+      // Should auto-advance to Infect phase if no discards needed
+      if (!outcome.needsDiscard) {
+        expect(game.getCurrentPhase()).toBe(TurnPhase.Infect);
+      }
+    });
+
+    it("does not advance if discards needed", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 6 cards, then draw 2 more = 8 total (over limit)
+      const sixCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+        { type: "city", city: "London", color: Disease.Blue },
+      ];
+
+      const card1: CityCard = { type: "city", city: "Paris", color: Disease.Blue };
+      const card2: CityCard = { type: "city", city: "Madrid", color: Disease.Blue };
+      const playerDeck = [card1, card2, ...state.playerDeck.slice(2)];
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: sixCards } : p)),
+        playerDeck,
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Should NOT auto-advance if discards needed
+      expect(outcome.needsDiscard).toBe(true);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
+    });
+  });
+
+  describe("Infect -> Actions transition", () => {
+    it("auto-advances to next player's Actions phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const initialPlayerIndex = state.currentPlayerIndex;
+
+      // Manually advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      // Execute infection phase
+      game.infectCities();
+
+      // Should auto-advance to Actions phase with next player
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getActionsRemaining()).toBe(4);
+      expect(game.getGameState().currentPlayerIndex).toBe((initialPlayerIndex + 1) % 2);
+    });
+
+    it("wraps around to player 0 after last player", () => {
+      const game = startGame({ playerCount: 3, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set to last player (index 2)
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        currentPlayerIndex: 2,
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      // Execute infection phase
+      game.infectCities();
+
+      // Should wrap around to player 0
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getGameState().currentPlayerIndex).toBe(0);
+    });
+
+    it("resets special action flags", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set some flags that should be reset
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        operationsExpertSpecialMoveUsed: true,
+        skipNextInfectionPhase: true,
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      // Execute infection phase
+      const outcome = game.infectCities();
+
+      // Flags should be reset
+      expect(outcome.state.operationsExpertSpecialMoveUsed).toBe(false);
+      expect(outcome.state.skipNextInfectionPhase).toBe(false);
+    });
+  });
+
+  describe("Full turn cycle", () => {
+    it("completes a full turn cycle through all phases", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const initialPlayerIndex = state.currentPlayerIndex;
+
+      // Phase 1: Actions (start state)
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getActionsRemaining()).toBe(4);
+
+      // Perform 4 actions to advance to Draw phase
+      const atlanta = getCity("Atlanta");
+      const firstConnection = atlanta.connections[0];
+
+      if (!firstConnection) {
+        throw new Error("Atlanta must have at least one connection");
+      }
+
+      for (let i = 0; i < 4; i++) {
+        const destination = i % 2 === 0 ? firstConnection : "Atlanta";
+        game.performAction(`drive-ferry:${destination}`);
+      }
+
+      // Phase 2: Draw (after 4 actions)
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
+
+      // Draw cards (will auto-advance to Infect if no discards needed)
+      const drawOutcome = game.drawCards();
+
+      // Phase 3: Infect (if no discards needed)
+      if (!drawOutcome.needsDiscard) {
+        expect(game.getCurrentPhase()).toBe(TurnPhase.Infect);
+
+        // Execute infection phase (will auto-advance to next player's Actions)
+        game.infectCities();
+
+        // Phase 4: Back to Actions with next player
+        expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+        expect(game.getActionsRemaining()).toBe(4);
+        expect(game.getGameState().currentPlayerIndex).toBe((initialPlayerIndex + 1) % 2);
+      }
     });
   });
 });
