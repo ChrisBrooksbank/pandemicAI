@@ -870,6 +870,11 @@ describe("Epidemic resolution", () => {
         black: 24,
         red: 24,
       },
+      // Ensure no Quarantine Specialist interferes - use Medic and Scientist roles in safe locations
+      players: [
+        { role: Role.Medic, location: "Tokyo", hand: [], contingencyCard: null },
+        { role: Role.Scientist, location: "Sydney", hand: [], contingencyCard: null },
+      ],
     };
 
     const result = resolveEpidemic(testState);
