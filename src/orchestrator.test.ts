@@ -13,6 +13,7 @@ import {
   Disease,
   Role,
   CureStatus,
+  EventType,
   type GameState,
   type CityCard,
   type EventCard,
@@ -1250,6 +1251,343 @@ describe("Phase auto-advancement", () => {
         expect(game.getActionsRemaining()).toBe(4);
         expect(game.getGameState().currentPlayerIndex).toBe((initialPlayerIndex + 1) % 2);
       }
+    });
+  });
+
+  describe("getPlayableEvents", () => {
+    it("returns empty array when no players have event cards", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Clear all player hands to ensure no event cards
+      const state = game.getGameState();
+      const clearedState: GameState = {
+        ...state,
+        players: state.players.map((p) => ({ ...p, hand: [] })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = clearedState;
+
+      const playableEvents = game.getPlayableEvents();
+      expect(playableEvents).toEqual([]);
+    });
+
+    it("returns events from player hands", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 0 two event cards
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      const forecastCard: EventCard = { type: "event", event: EventType.Forecast };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [airliftCard, forecastCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const playableEvents = game.getPlayableEvents();
+
+      expect(playableEvents).toHaveLength(2);
+      expect(playableEvents).toContainEqual({ playerIndex: 0, eventType: EventType.Airlift });
+      expect(playableEvents).toContainEqual({ playerIndex: 0, eventType: EventType.Forecast });
+    });
+
+    it("includes stored event cards from Contingency Planner", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 1 a stored event card
+      const storedCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: [],
+          storedEventCard: i === 1 ? storedCard : undefined,
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const playableEvents = game.getPlayableEvents();
+
+      expect(playableEvents).toHaveLength(1);
+      expect(playableEvents[0]).toEqual({ playerIndex: 1, eventType: EventType.OneQuietNight });
+    });
+
+    it("returns events from multiple players", () => {
+      const game = startGame({ playerCount: 3, difficulty: 4 });
+      const state = game.getGameState();
+
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      const grantCard: EventCard = { type: "event", event: EventType.GovernmentGrant };
+      const storedCard: EventCard = { type: "event", event: EventType.ResilientPopulation };
+
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [airliftCard] : i === 1 ? [grantCard] : [],
+          storedEventCard: i === 2 ? storedCard : undefined,
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const playableEvents = game.getPlayableEvents();
+
+      expect(playableEvents).toHaveLength(3);
+      expect(playableEvents).toContainEqual({ playerIndex: 0, eventType: EventType.Airlift });
+      expect(playableEvents).toContainEqual({
+        playerIndex: 1,
+        eventType: EventType.GovernmentGrant,
+      });
+      expect(playableEvents).toContainEqual({
+        playerIndex: 2,
+        eventType: EventType.ResilientPopulation,
+      });
+    });
+  });
+
+  describe("playEvent", () => {
+    it("plays Airlift event successfully during Actions phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 0 an Airlift card
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [airliftCard] : [],
+          location: "Atlanta",
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      // Play airlift to move player 1 to Tokyo
+      const outcome = game.playEvent(0, {
+        event: EventType.Airlift,
+        targetPlayerIndex: 1,
+        destinationCity: "Tokyo",
+      });
+
+      expect(outcome.eventType).toBe(EventType.Airlift);
+      expect(outcome.playerIndex).toBe(0);
+      expect(outcome.fromStoredCard).toBe(false);
+      expect(outcome.gameStatus).toBe(GameStatus.Ongoing);
+      expect(game.getGameState().players[1]?.location).toBe("Tokyo");
+
+      // Event card should be removed from hand
+      expect(game.getGameState().players[0]?.hand).toHaveLength(0);
+    });
+
+    it("plays event during Draw phase (event cards playable anytime)", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 0 a One Quiet Night card and advance to Draw phase
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, { event: EventType.OneQuietNight });
+
+      expect(outcome.eventType).toBe(EventType.OneQuietNight);
+      expect(outcome.gameStatus).toBe(GameStatus.Ongoing);
+      expect(game.getGameState().skipNextInfectionPhase).toBe(true);
+
+      // Phase should NOT advance (events don't change phase)
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
+    });
+
+    it("plays event from Contingency Planner stored card", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 0 a stored Government Grant card
+      const storedCard: EventCard = { type: "event", event: EventType.GovernmentGrant };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: [],
+          storedEventCard: i === 0 ? storedCard : undefined,
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, {
+        event: EventType.GovernmentGrant,
+        targetCity: "Tokyo",
+      });
+
+      expect(outcome.fromStoredCard).toBe(true);
+      expect(game.getGameState().board["Tokyo"]?.hasResearchStation).toBe(true);
+
+      // Stored card should be removed
+      expect(game.getGameState().players[0]?.storedEventCard).toBeUndefined();
+    });
+
+    it("does not consume actions when playing event", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const actionsBefore = game.getActionsRemaining();
+      game.playEvent(0, { event: EventType.OneQuietNight });
+      const actionsAfter = game.getActionsRemaining();
+
+      expect(actionsAfter).toBe(actionsBefore);
+    });
+
+    it("throws InvalidActionError when player does not have event card", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Clear player hands
+      const clearedState: GameState = {
+        ...state,
+        players: state.players.map((p) => ({ ...p, hand: [] })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = clearedState;
+
+      expect(() =>
+        game.playEvent(0, {
+          event: EventType.Airlift,
+          targetPlayerIndex: 1,
+          destinationCity: "Tokyo",
+        }),
+      ).toThrow(InvalidActionError);
+    });
+
+    it("throws InvalidActionError when event execution fails", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.ResilientPopulation };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+        infectionDiscard: [], // Empty discard pile
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      // Try to play Resilient Population with a city that's not in discard
+      expect(() =>
+        game.playEvent(0, {
+          event: EventType.ResilientPopulation,
+          cityName: "Atlanta",
+        }),
+      ).toThrow(InvalidActionError);
+    });
+
+    it("throws GameOverError when game has ended", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const endedState: GameState = {
+        ...state,
+        status: GameStatus.Lost,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = endedState;
+
+      expect(() => game.playEvent(0, { event: EventType.OneQuietNight })).toThrow(GameOverError);
+    });
+
+    it("plays Forecast event with reordering", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.Forecast };
+
+      // Get the top 6 cards from infection deck
+      const top6Cities = state.infectionDeck.slice(0, 6).map((card) => card.city);
+      const reversedOrder = [...top6Cities].reverse();
+
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, {
+        event: EventType.Forecast,
+        newOrder: reversedOrder,
+      });
+
+      expect(outcome.eventType).toBe(EventType.Forecast);
+
+      // Verify the infection deck was reordered
+      const newTop6 = game
+        .getGameState()
+        .infectionDeck.slice(0, 6)
+        .map((card) => card.city);
+      expect(newTop6).toEqual(reversedOrder);
+    });
+
+    it("plays Resilient Population to remove card from infection discard", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.ResilientPopulation };
+      const infectionCard = state.infectionDeck[0];
+      if (!infectionCard) {
+        throw new Error("Test setup failed: no infection cards");
+      }
+
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+        infectionDiscard: [infectionCard],
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const discardLengthBefore = game.getGameState().infectionDiscard.length;
+
+      const outcome = game.playEvent(0, {
+        event: EventType.ResilientPopulation,
+        cityName: infectionCard.city,
+      });
+
+      expect(outcome.eventType).toBe(EventType.ResilientPopulation);
+
+      // Card should be removed from infection discard
+      const discardLengthAfter = game.getGameState().infectionDiscard.length;
+      expect(discardLengthAfter).toBe(discardLengthBefore - 1);
+      expect(
+        game.getGameState().infectionDiscard.find((c) => c.city === infectionCard.city),
+      ).toBeUndefined();
     });
   });
 });

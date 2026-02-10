@@ -25,6 +25,14 @@ import {
   type ActionResult,
 } from "./actions";
 import {
+  airlift,
+  forecast,
+  governmentGrant,
+  oneQuietNight,
+  resilientPopulation,
+  hasEventCard,
+} from "./events";
+import {
   GameStatus,
   TurnPhase,
   Disease,
@@ -184,6 +192,32 @@ export interface InfectOutcome {
   outbreaks: OutbreakInfo[];
   /** Total number of cubes placed during this phase */
   cubesPlaced: number;
+}
+
+/**
+ * Parameters for event card effects
+ */
+export type EventParams =
+  | { event: EventType.Airlift; targetPlayerIndex: number; destinationCity: string }
+  | { event: EventType.GovernmentGrant; targetCity: string; cityToRemoveStation?: string }
+  | { event: EventType.OneQuietNight }
+  | { event: EventType.ResilientPopulation; cityName: string }
+  | { event: EventType.Forecast; newOrder: string[] };
+
+/**
+ * Outcome of playing an event card
+ */
+export interface EventOutcome {
+  /** The updated game state after playing the event */
+  state: GameState;
+  /** Current game status after the event (should remain Ongoing unless something went wrong) */
+  gameStatus: GameStatus;
+  /** The type of event that was played */
+  eventType: EventType;
+  /** The player who played the event */
+  playerIndex: number;
+  /** Whether the event was played from stored card (Contingency Planner) */
+  fromStoredCard: boolean;
 }
 
 /**
@@ -527,6 +561,147 @@ export class OrchestratedGame {
       citiesInfected,
       outbreaks,
       cubesPlaced,
+    };
+  }
+
+  /**
+   * Get all events that can be played by any player.
+   * Includes both events in player hands and events stored on Contingency Planner.
+   *
+   * @returns Array of playable events with player index and event type
+   */
+  getPlayableEvents(): Array<{ playerIndex: number; eventType: EventType }> {
+    const playableEvents: Array<{ playerIndex: number; eventType: EventType }> = [];
+
+    // Check each player's hand and stored card
+    for (let i = 0; i < this.gameState.players.length; i++) {
+      const player = this.gameState.players[i];
+      if (!player) continue;
+
+      // Check cards in hand
+      for (const card of player.hand) {
+        if (card.type === "event") {
+          playableEvents.push({
+            playerIndex: i,
+            eventType: card.event,
+          });
+        }
+      }
+
+      // Check stored event card (Contingency Planner)
+      if (player.storedEventCard) {
+        playableEvents.push({
+          playerIndex: i,
+          eventType: player.storedEventCard.event,
+        });
+      }
+    }
+
+    return playableEvents;
+  }
+
+  /**
+   * Play an event card during any phase.
+   * Event cards can be played at any time and do not consume actions.
+   *
+   * This method:
+   * - Validates the game is ongoing
+   * - Validates the player has the event card (in hand or stored on Contingency Planner)
+   * - Executes the event-specific logic
+   * - Does NOT advance the phase or consume actions
+   *
+   * @param playerIndex - Index of the player playing the event
+   * @param params - Event-specific parameters (discriminated union by event type)
+   * @returns EventOutcome with updated state and event information
+   * @throws InvalidActionError if the event cannot be played
+   * @throws GameOverError if the game has ended
+   */
+  playEvent(playerIndex: number, params: EventParams): EventOutcome {
+    // Validate game is ongoing
+    this.validateGameOngoing();
+
+    // Validate player index
+    const player = this.gameState.players[playerIndex];
+    if (!player) {
+      throw new InvalidActionError(
+        `playEvent:${params.event}`,
+        `Invalid player index: ${playerIndex}`,
+      );
+    }
+
+    // Check if player has the event card (in hand or stored)
+    const hasCard = hasEventCard(this.gameState, params.event, playerIndex);
+    if (!hasCard) {
+      throw new InvalidActionError(
+        `playEvent:${params.event}`,
+        `Player ${playerIndex} does not have ${params.event} event card`,
+      );
+    }
+
+    // Determine if the event is from stored card (Contingency Planner)
+    const fromStoredCard = player.storedEventCard?.event === params.event;
+
+    // Execute the event based on type
+    let result;
+    switch (params.event) {
+      case EventType.Airlift:
+        result = airlift(
+          this.gameState,
+          params.targetPlayerIndex,
+          params.destinationCity,
+          playerIndex,
+        );
+        break;
+
+      case EventType.GovernmentGrant:
+        result = governmentGrant(
+          this.gameState,
+          params.targetCity,
+          params.cityToRemoveStation,
+          playerIndex,
+        );
+        break;
+
+      case EventType.OneQuietNight:
+        result = oneQuietNight(this.gameState, playerIndex);
+        break;
+
+      case EventType.ResilientPopulation:
+        result = resilientPopulation(this.gameState, params.cityName, playerIndex);
+        break;
+
+      case EventType.Forecast:
+        result = forecast(this.gameState, params.newOrder, playerIndex);
+        break;
+
+      default: {
+        // TypeScript exhaustiveness check
+        const _exhaustive: never = params;
+        throw new InvalidActionError(
+          "playEvent",
+          `Unknown event type: ${(_exhaustive as EventParams).event}`,
+        );
+      }
+    }
+
+    // Check if the event succeeded
+    if (!result.success) {
+      throw new InvalidActionError(`playEvent:${params.event}`, result.error);
+    }
+
+    // Update the internal game state
+    this.gameState = result.state;
+
+    // Get the updated game status
+    const gameStatus = getGameStatus(this.gameState);
+
+    // Return the outcome (no phase advancement, no action consumption)
+    return {
+      state: this.gameState,
+      gameStatus,
+      eventType: params.event,
+      playerIndex,
+      fromStoredCard,
     };
   }
 

@@ -137,7 +137,7 @@
 - [x] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
 - [x] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
 - [x] Implement phase auto-advancement (Actions→Draw→Infect→next player)
-- [ ] Implement playEvent() for event cards playable during any phase
+- [x] Implement playEvent() for event cards playable during any phase
 - [ ] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
 - [ ] Add error types (InvalidPhaseError, InvalidActionError, GameOverError)
 - [ ] Add unit tests for orchestrator phase transitions and outcome types
