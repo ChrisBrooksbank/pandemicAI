@@ -131,3 +131,59 @@ export function hasEventCard(
 
   return hasInHand || hasStored;
 }
+
+/**
+ * Play the Airlift event card.
+ * Move any 1 pawn to any city.
+ *
+ * @param state - The current game state
+ * @param targetPlayerIndex - Index of the player to move
+ * @param destinationCity - Name of the city to move the player to
+ * @param eventPlayerIndex - Index of the player playing the event (defaults to current player)
+ * @returns EventResult with updated state or error message
+ */
+export function airlift(
+  state: GameState,
+  targetPlayerIndex: number,
+  destinationCity: string,
+  eventPlayerIndex?: number,
+): EventResult {
+  // First, play the event card (handles validation and card removal)
+  const playResult = playEventCard(state, EventType.Airlift, eventPlayerIndex);
+  if (!playResult.success) {
+    return playResult;
+  }
+
+  // Validate target player index
+  const targetPlayer = playResult.state.players[targetPlayerIndex];
+  if (!targetPlayer) {
+    return {
+      success: false,
+      error: `Invalid target player index: ${targetPlayerIndex}`,
+    };
+  }
+
+  // Validate destination city exists on the board
+  const cityState = playResult.state.board[destinationCity];
+  if (cityState === undefined) {
+    return {
+      success: false,
+      error: `Invalid destination city: ${destinationCity}`,
+    };
+  }
+
+  // Move the target player to the destination city
+  const updatedPlayers = [...playResult.state.players];
+  updatedPlayers[targetPlayerIndex] = {
+    ...targetPlayer,
+    location: destinationCity,
+  };
+
+  return {
+    success: true,
+    state: {
+      ...playResult.state,
+      players: updatedPlayers,
+    },
+  };
+}

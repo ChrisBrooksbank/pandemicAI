@@ -1,6 +1,6 @@
 // Tests for event card functionality
 import { describe, it, expect } from "vitest";
-import { playEventCard, hasEventCard } from "./events";
+import { playEventCard, hasEventCard, airlift } from "./events";
 import {
   Disease,
   EventType,
@@ -297,6 +297,175 @@ describe("Event Card Playability", () => {
     it("should return false for invalid player index", () => {
       const state = createTestGameState();
       expect(hasEventCard(state, EventType.Airlift, 999)).toBe(false);
+    });
+  });
+
+  describe("airlift", () => {
+    it("should move any player to any city", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 1, "Paris");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player 1 should be moved to Paris
+        expect(result.state.players[1]?.location).toBe("Paris");
+        // Player 0 should remain in Atlanta
+        expect(result.state.players[0]?.location).toBe("Atlanta");
+        // Event card should be removed from hand
+        expect(result.state.players[0]?.hand).toHaveLength(1);
+        // Event card should be in discard pile
+        expect(result.state.playerDiscard).toHaveLength(1);
+      }
+    });
+
+    it("should allow moving the current player", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 0, "Chicago");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player 0 should be moved to Chicago
+        expect(result.state.players[0]?.location).toBe("Chicago");
+      }
+    });
+
+    it("should work even if player is already at destination", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 0, "Atlanta");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player 0 should remain in Atlanta
+        expect(result.state.players[0]?.location).toBe("Atlanta");
+        // Event should still be played
+        expect(result.state.playerDiscard).toHaveLength(1);
+      }
+    });
+
+    it("should fail if event card is not in hand", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      // Remove Airlift from player 0's hand
+      const stateNoEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+          },
+          player1,
+        ],
+      };
+
+      const result = airlift(stateNoEvent, 1, "Paris");
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("does not have");
+      }
+    });
+
+    it("should fail with invalid destination city", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 1, "InvalidCity");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid destination city");
+      }
+    });
+
+    it("should fail with invalid target player index", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 999, "Paris");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid target player index");
+      }
+    });
+
+    it("should allow a different player to play the event", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      // Give player 1 the Airlift card
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+          },
+          {
+            ...player1,
+            hand: [
+              { type: "city", city: "Paris", color: Disease.Blue },
+              { type: "event", event: EventType.Airlift },
+            ],
+          },
+        ],
+      };
+
+      // Player 1 plays Airlift to move player 0 to Paris
+      const result = airlift(stateWithEvent, 0, "Paris", 1);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player 0 should be moved to Paris
+        expect(result.state.players[0]?.location).toBe("Paris");
+        // Player 1's hand should have the event removed
+        expect(result.state.players[1]?.hand).toHaveLength(1);
+      }
+    });
+
+    it("should work with stored event from Contingency Planner", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const eventCard: EventCard = { type: "event", event: EventType.Airlift };
+      const stateWithStored: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            role: Role.ContingencyPlanner,
+            hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+            storedEventCard: eventCard,
+          },
+          player1,
+        ],
+      };
+
+      const result = airlift(stateWithStored, 1, "Chicago");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player 1 should be moved to Chicago
+        expect(result.state.players[1]?.location).toBe("Chicago");
+        // Stored event should be cleared
+        expect(result.state.players[0]?.storedEventCard).toBeUndefined();
+        // Stored event should NOT go to discard (removed from game)
+        expect(result.state.playerDiscard).toHaveLength(0);
+      }
+    });
+
+    it("should not cost an action", () => {
+      const state = createTestGameState();
+      const result = airlift(state, 1, "Paris");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Actions remaining should be unchanged
+        expect(result.state.actionsRemaining).toBe(4);
+      }
     });
   });
 });

@@ -2717,9 +2717,11 @@ describe("drawPlayerCards", () => {
     game.phase = TurnPhase.Draw;
 
     // Ensure no Quarantine Specialist interferes with epidemic test
+    // Also clear hands to ensure no epidemic cards from initial setup
     game.players = game.players.map((player) => ({
       ...player,
       role: Role.Medic,
+      hand: player.hand.filter((card) => card.type !== "epidemic"), // Remove any epidemic cards
     }));
 
     // Setup known infection deck for epidemic resolution
@@ -2736,7 +2738,9 @@ describe("drawPlayerCards", () => {
     const epidemicCard = { type: "epidemic" as const };
     const nonEpidemicCard = game.playerDeck.find((card) => card.type !== "epidemic");
     if (nonEpidemicCard) {
-      game.playerDeck = [epidemicCard, nonEpidemicCard, ...game.playerDeck.slice(2)];
+      // Filter out any other epidemic cards to ensure predictable behavior
+      const restOfDeck = game.playerDeck.slice(2).filter((card) => card.type !== "epidemic");
+      game.playerDeck = [epidemicCard, nonEpidemicCard, ...restOfDeck];
 
       const initialHandSize = getCurrentPlayer(game).hand.length;
       const result = drawPlayerCards(game);

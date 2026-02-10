@@ -114,7 +114,7 @@
 ### Phase 14: Event Cards (Spec: roles-and-events.md)
 
 - [x] Implement event card playability (playable anytime, no action cost)
-- [ ] Implement Airlift event (move any pawn to any city)
+- [x] Implement Airlift event (move any pawn to any city)
 - [ ] Implement Government Grant event (build research station anywhere)
 - [ ] Implement One Quiet Night event (skip next infection phase)
 - [ ] Implement Resilient Population event (remove card from infection discard)
@@ -150,3 +150,13 @@
 - Phase 8-9 must complete before Phase 10 (need infection logic before epidemics)
 - Phase 11 requires all previous phases (win/loss detection needs complete game mechanics)
 - Phase 12-14 can start after Phase 11 (roles/events modify existing mechanics)
+
+### Known Issues
+
+- **Flaky tests** (from iteration 40+):
+  - Several tests use `createGame()` which shuffles decks, causing non-deterministic failures
+  - `game.test.ts`: drawPlayerCards tests fail when epidemic cards appear at top of shuffled deck
+  - `infection.test.ts`: epidemic outbreak test sometimes fails (cube placement logic issue)
+  - Tests need to be refactored to use deterministic setups (manually construct decks without randomness)
+  - Iteration 41 fixed one source of flakiness (epidemic handling test now filters epidemic cards from player hands)
+  - Need separate iteration to fix remaining test flakiness and make test suite deterministic
