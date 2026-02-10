@@ -2,11 +2,11 @@
 
 import { describe, it, expect } from "vitest";
 import type { Bot } from "./bot";
-import { RandomBot } from "./bot";
+import { RandomBot, PriorityBot } from "./bot";
 import { createGame } from "./game";
 import { getAvailableActions } from "./game";
-import type { GameState, InfectionCard, CityCard } from "./types";
-import { Disease } from "./types";
+import type { GameState, InfectionCard, CityCard, EventCard } from "./types";
+import { Disease, Role, EventType } from "./types";
 
 // Mock bot implementation for testing the interface
 class MockBot implements Bot {
@@ -400,6 +400,339 @@ describe("RandomBot", () => {
       const ordered = bot.chooseForecastOrder(cards);
 
       expect(ordered).toEqual(cards);
+    });
+  });
+});
+
+describe("PriorityBot", () => {
+  describe("chooseAction", () => {
+    it("should prioritize treating city with 3 cubes", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      // Set up state with 3 blue cubes in Atlanta
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const atlantaState = state.board["Atlanta"];
+      if (!atlantaState) throw new Error("Atlanta not found");
+
+      state.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 3,
+      };
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [],
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("treat:blue");
+    });
+
+    it("should prioritize discovering cure at research station with enough cards", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const atlantaState = state.board["Atlanta"];
+      if (!atlantaState) throw new Error("Atlanta not found");
+
+      // Give player 5 blue cards
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+      ];
+
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: blueCards,
+      };
+
+      // Atlanta already has research station in initial setup
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("discover-cure:blue");
+    });
+
+    it("should respect Scientist role (4 cards needed)", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Give player 4 blue cards and Scientist role
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+      ];
+
+      state.players[0] = {
+        ...player,
+        role: Role.Scientist,
+        location: "Atlanta",
+        hand: blueCards,
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("discover-cure:blue");
+    });
+
+    it("should move toward research station when holding enough cards for cure", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Give player 5 blue cards
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+        { type: "city", city: "London", color: Disease.Blue },
+      ];
+
+      // Place player in Chicago (adjacent to Atlanta which has research station)
+      state.players[0] = {
+        ...player,
+        location: "Chicago",
+        hand: blueCards,
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should move toward Atlanta (research station)
+      expect(chosenAction).toBe("drive-ferry:Atlanta");
+    });
+
+    it("should share knowledge when at same location with another player", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) throw new Error("Players not found");
+
+      // Both players at Atlanta, player 0 has Atlanta card
+      state.players[0] = {
+        ...player0,
+        location: "Atlanta",
+        hand: [{ type: "city", city: "Atlanta", color: Disease.Blue }],
+      };
+      state.players[1] = {
+        ...player1,
+        location: "Atlanta",
+        hand: [],
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should share the Atlanta card
+      expect(chosenAction).toMatch(/^share-give:1:Atlanta$/);
+    });
+
+    it("should play One Quiet Night when infection rate is high", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Set high infection rate
+      state.infectionRatePosition = 5;
+
+      // Give player One Quiet Night event card
+      const oneQuietNightCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [oneQuietNightCard],
+      };
+
+      const actions = ["event:one-quiet-night", "drive-ferry:Chicago", "drive-ferry:Washington"];
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("event:one-quiet-night");
+    });
+
+    it("should not play One Quiet Night when infection rate is low", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Set low infection rate
+      state.infectionRatePosition = 2;
+
+      const oneQuietNightCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [oneQuietNightCard],
+      };
+
+      const actions = ["event:one-quiet-night", "drive-ferry:Chicago", "drive-ferry:Washington"];
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should not play the event, choose a movement action instead
+      expect(chosenAction).not.toBe("event:one-quiet-night");
+    });
+
+    it("should return valid action from available actions", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(typeof chosenAction).toBe("string");
+      expect(actions).toContain(chosenAction);
+    });
+
+    it("should handle empty action list", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions: string[] = [];
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("");
+    });
+  });
+
+  describe("chooseDiscards", () => {
+    it("should discard cards with fewest same-color duplicates", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Give player: 3 blue cards, 2 yellow cards, 1 red card, 1 black card
+      const cards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue }, // index 0
+        { type: "city", city: "Chicago", color: Disease.Blue }, // index 1
+        { type: "city", city: "Montreal", color: Disease.Blue }, // index 2
+        { type: "city", city: "Lagos", color: Disease.Yellow }, // index 3
+        { type: "city", city: "Kinshasa", color: Disease.Yellow }, // index 4
+        { type: "city", city: "Tokyo", color: Disease.Red }, // index 5
+        { type: "city", city: "Beijing", color: Disease.Black }, // index 6
+      ];
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 2);
+
+      expect(discardIndices).toHaveLength(2);
+      // Should discard the single cards (red and black) over cards with more duplicates
+      expect(discardIndices).toContain(5); // Red
+      expect(discardIndices).toContain(6); // Black
+    });
+
+    it("should return sorted indices", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const cards: CityCard[] = Array.from({ length: 7 }, (_, i) => ({
+        type: "city" as const,
+        city: `City${i}`,
+        color: Disease.Blue,
+      }));
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 3);
+
+      expect(discardIndices).toHaveLength(3);
+      // Indices should be sorted
+      for (let i = 1; i < discardIndices.length; i++) {
+        const prev = discardIndices[i - 1];
+        const curr = discardIndices[i];
+        if (prev !== undefined && curr !== undefined) {
+          expect(prev).toBeLessThan(curr);
+        }
+      }
+    });
+
+    it("should handle invalid player index", () => {
+      const bot = new PriorityBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const discardIndices = bot.chooseDiscards(state, 99, 2);
+
+      expect(discardIndices).toEqual([]);
+    });
+  });
+
+  describe("chooseForecastOrder", () => {
+    it("should return all cards", () => {
+      const bot = new PriorityBot();
+
+      const cards: InfectionCard[] = [
+        { city: "Atlanta", color: Disease.Blue },
+        { city: "Chicago", color: Disease.Blue },
+        { city: "Lagos", color: Disease.Yellow },
+      ];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toHaveLength(cards.length);
+      expect(ordered.every((card) => cards.includes(card))).toBe(true);
+    });
+
+    it("should not duplicate or lose cards", () => {
+      const bot = new PriorityBot();
+
+      const cards: InfectionCard[] = [
+        { city: "Atlanta", color: Disease.Blue },
+        { city: "Chicago", color: Disease.Blue },
+        { city: "Lagos", color: Disease.Yellow },
+      ];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toHaveLength(3);
+      expect(ordered.filter((c) => c.city === "Atlanta")).toHaveLength(1);
+      expect(ordered.filter((c) => c.city === "Chicago")).toHaveLength(1);
+      expect(ordered.filter((c) => c.city === "Lagos")).toHaveLength(1);
+    });
+
+    it("should handle empty card array", () => {
+      const bot = new PriorityBot();
+      const cards: InfectionCard[] = [];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toEqual([]);
     });
   });
 });
