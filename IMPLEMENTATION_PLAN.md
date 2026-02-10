@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 54
+- Build iterations: 55
 - Last updated: 2026-02-10
 
 ## Tasks
@@ -134,7 +134,7 @@
 - [x] Create OrchestratedGame class wrapping GameState (spec: game-orchestration.md)
 - [x] Implement game lifecycle methods: startGame(), getCurrentPhase(), getCurrentPlayer(), getActionsRemaining()
 - [x] Implement performAction() with ActionOutcome discriminated union type
-- [ ] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
+- [x] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
 - [ ] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
 - [ ] Implement phase auto-advancement (Actions→Draw→Infect→next player)
 - [ ] Implement playEvent() for event cards playable during any phase

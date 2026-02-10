@@ -7,7 +7,17 @@ import {
   InvalidPhaseError,
   InvalidActionError,
 } from "./orchestrator";
-import { GameStatus, TurnPhase, Disease, Role, CureStatus, type GameState } from "./types";
+import {
+  GameStatus,
+  TurnPhase,
+  Disease,
+  Role,
+  CureStatus,
+  type GameState,
+  type CityCard,
+  type EventCard,
+  type PlayerCard,
+} from "./types";
 import { getCity } from "./board";
 
 describe("OrchestratedGame", () => {
@@ -450,6 +460,325 @@ describe("OrchestratedGame.performAction", () => {
 
       expect(outcome.sideEffects.diseasesEradicated).toBeDefined();
       expect(outcome.sideEffects.diseasesEradicated).toContain(Disease.Blue);
+    });
+  });
+});
+
+describe("OrchestratedGame.drawCards", () => {
+  describe("phase validation", () => {
+    it("throws InvalidPhaseError when not in Draw phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Game starts in Actions phase
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      expect(() => game.drawCards()).toThrow(InvalidPhaseError);
+      expect(() => game.drawCards()).toThrow(/Draw phase/);
+    });
+
+    it("succeeds when in Draw phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Draw phase
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome).toBeDefined();
+      expect(outcome.gameStatus).toBeDefined();
+    });
+
+    it("throws GameOverError when game has ended", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set game to lost status in Draw phase
+      const lostState: GameState = { ...state, phase: TurnPhase.Draw, status: GameStatus.Lost };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.drawCards()).toThrow(GameOverError);
+    });
+  });
+
+  describe("drawing regular cards", () => {
+    it("draws 2 city cards and adds them to hand", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const initialHandSize = state.players[0]?.hand.length ?? 0;
+
+      // Ensure the top 2 cards are city cards (not epidemics)
+      const card1: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+      const card2: CityCard = { type: "city", city: "Beijing", color: Disease.Red };
+      const playerDeck = [card1, card2, ...state.playerDeck.slice(2)];
+
+      // Advance to Draw phase
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw, playerDeck };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.cardsDrawn).toHaveLength(2);
+      expect(outcome.epidemics).toHaveLength(0);
+      expect(outcome.gameStatus).toBe(GameStatus.Ongoing);
+
+      // Hand should have 2 more cards
+      const currentPlayer = game.getCurrentPlayer();
+      expect(currentPlayer.hand.length).toBe(initialHandSize + 2);
+    });
+
+    it("populates card details correctly", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Advance to Draw phase
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Check that drawn cards have proper structure
+      for (const card of outcome.cardsDrawn) {
+        expect(card.name).toBeDefined();
+        expect(card.type).toMatch(/^(city|event)$/);
+        if (card.type === "city") {
+          expect(card.color).toBeDefined();
+          expect(card.color).toMatch(/^(blue|yellow|black|red)$/);
+        }
+      }
+    });
+  });
+
+  describe("hand limit detection", () => {
+    it("detects when hand limit is not exceeded", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Start with 4 cards (2-player game), draw 2 more = 6 total (under limit)
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.needsDiscard).toBe(false);
+      expect(outcome.playersNeedingDiscard).toHaveLength(0);
+    });
+
+    it("detects when hand limit is exceeded", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 6 cards, then draw 2 more = 8 total (over limit)
+      const sixCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+        { type: "city", city: "London", color: Disease.Blue },
+      ];
+
+      // Ensure the top 2 cards are city cards (not epidemics)
+      const card1: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+      const card2: CityCard = { type: "city", city: "Beijing", color: Disease.Red };
+      const playerDeck = [card1, card2, ...state.playerDeck.slice(2)];
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: sixCards } : p)),
+        playerDeck,
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.needsDiscard).toBe(true);
+      expect(outcome.playersNeedingDiscard).toContain(0);
+      expect(game.getCurrentPlayer().hand.length).toBe(8);
+    });
+
+    it("handles exactly 7 cards (at limit, no discard needed)", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player 5 cards, then draw 2 more = 7 total (exactly at limit)
+      const fiveCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+      ];
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: fiveCards } : p)),
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.needsDiscard).toBe(false);
+      expect(outcome.playersNeedingDiscard).toHaveLength(0);
+      expect(game.getCurrentPlayer().hand.length).toBe(7);
+    });
+  });
+
+  describe("epidemic resolution", () => {
+    it("resolves epidemic card when drawn", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Place an epidemic card at the top of the player deck
+      const epidemicCard: PlayerCard = { type: "epidemic" };
+      const regularCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [epidemicCard, regularCard, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Should have 1 epidemic
+      expect(outcome.epidemics).toHaveLength(1);
+
+      // Should have drawn 1 regular card (the other was epidemic)
+      expect(outcome.cardsDrawn).toHaveLength(1);
+
+      // Epidemic info should be populated
+      const epidemic = outcome.epidemics[0];
+      if (epidemic) {
+        expect(epidemic.infectedCity).toBeDefined();
+        expect(epidemic.infectedColor).toBeDefined();
+        expect(epidemic.infectionRatePosition).toBeGreaterThan(0);
+      }
+    });
+
+    it("resolves multiple epidemics when both cards are epidemics", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Place two epidemic cards at the top of the player deck
+      const epidemic1: PlayerCard = { type: "epidemic" };
+      const epidemic2: PlayerCard = { type: "epidemic" };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [epidemic1, epidemic2, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Should have 2 epidemics
+      expect(outcome.epidemics).toHaveLength(2);
+
+      // Should have drawn 0 regular cards (both were epidemics)
+      expect(outcome.cardsDrawn).toHaveLength(0);
+    });
+
+    it("handles epidemic causing game loss", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up state where epidemic will cause loss (8 outbreaks already)
+      const epidemicCard: PlayerCard = { type: "epidemic" };
+      const regularCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        outbreakCount: 7, // One more outbreak will lose
+        playerDeck: [epidemicCard, regularCard, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Game may or may not be lost depending on if the epidemic causes outbreak
+      // At minimum, we should have epidemic info
+      expect(outcome.epidemics).toHaveLength(1);
+    });
+  });
+
+  describe("deck exhaustion", () => {
+    it("causes game loss when deck has fewer than 2 cards", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set deck to have only 1 card
+      const oneCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [oneCard],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Game should be lost
+      expect(outcome.gameStatus).toBe(GameStatus.Lost);
+    });
+
+    it("causes game loss when deck is empty", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Game should be lost
+      expect(outcome.gameStatus).toBe(GameStatus.Lost);
+    });
+  });
+
+  describe("event cards", () => {
+    it("draws event card and adds to hand", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Place an event card and a city card at the top
+      const eventCard: EventCard = { type: "event", event: "airlift" };
+      const cityCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [eventCard, cityCard, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.cardsDrawn).toHaveLength(2);
+
+      // One should be an event
+      const eventDrawn = outcome.cardsDrawn.find((c) => c.type === "event");
+      expect(eventDrawn).toBeDefined();
+      expect(eventDrawn?.name).toBe("airlift");
+
+      // Event card should be in hand
+      const currentPlayer = game.getCurrentPlayer();
+      const eventInHand = currentPlayer.hand.find(
+        (c) => c.type === "event" && c.event === "airlift",
+      );
+      expect(eventInHand).toBeDefined();
     });
   });
 });

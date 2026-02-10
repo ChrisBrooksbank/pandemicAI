@@ -1,5 +1,12 @@
 // Game orchestration - high-level game loop coordinator
-import { createGame, getCurrentPlayer, getGameStatus, getAvailableActions } from "./game";
+import {
+  createGame,
+  getCurrentPlayer,
+  getGameStatus,
+  getAvailableActions,
+  drawPlayerCards,
+  type DrawCardsResult,
+} from "./game";
 import {
   driveFerry,
   directFlight,
@@ -46,8 +53,15 @@ export class GameOverError extends Error {
  * Error thrown when attempting an action during the wrong phase
  */
 export class InvalidPhaseError extends Error {
-  constructor(action: string, currentPhase: TurnPhase) {
-    super(`Cannot perform action '${action}' during ${currentPhase} phase`);
+  constructor(action: string, currentPhase: TurnPhase, requiredPhase?: TurnPhase) {
+    // Capitalize phase names for error messages
+    const capitalize = (phase: TurnPhase) => phase.charAt(0).toUpperCase() + phase.slice(1);
+    const phaseMsg = requiredPhase
+      ? `must be in ${capitalize(requiredPhase)} phase`
+      : `cannot be done during ${capitalize(currentPhase)} phase`;
+    super(
+      `Cannot perform action '${action}': ${phaseMsg}, currently in ${capitalize(currentPhase)} phase`,
+    );
     this.name = "InvalidPhaseError";
   }
 }
@@ -88,6 +102,48 @@ export interface ActionOutcome {
   sideEffects: ActionSideEffects;
   /** Number of actions remaining after this action */
   actionsRemaining: number;
+}
+
+/**
+ * Information about a card that was drawn
+ */
+export interface DrawnCard {
+  /** The name of the card (city name for city cards, event name for event cards) */
+  name: string;
+  /** The type of card drawn */
+  type: "city" | "event";
+  /** For city cards, the disease color */
+  color?: DiseaseColor;
+}
+
+/**
+ * Information about an epidemic that occurred during card draw
+ */
+export interface EpidemicInfo {
+  /** The city that was infected (from bottom of infection deck) */
+  infectedCity: string;
+  /** The disease color that was spread */
+  infectedColor: DiseaseColor;
+  /** The new infection rate position after increase */
+  infectionRatePosition: number;
+}
+
+/**
+ * Outcome of drawing player cards
+ */
+export interface DrawOutcome {
+  /** The updated game state after drawing */
+  state: GameState;
+  /** Current game status after drawing (may be lost if deck exhausted or epidemic caused loss) */
+  gameStatus: GameStatus;
+  /** Cards that were drawn and added to the player's hand */
+  cardsDrawn: DrawnCard[];
+  /** Epidemic information if any epidemics occurred */
+  epidemics: EpidemicInfo[];
+  /** Whether the hand limit is exceeded and discards are needed */
+  needsDiscard: boolean;
+  /** Player indices that need to discard (typically just current player) */
+  playersNeedingDiscard: number[];
 }
 
 /**
@@ -184,11 +240,14 @@ export class OrchestratedGame {
   /**
    * Validate that the game is still in progress.
    * Throws GameOverError if the game has ended.
+   *
+   * Note: This checks the game state's status field directly, not computed conditions.
+   * This allows methods like drawCards() to detect and report new loss conditions.
    */
   private validateGameOngoing(): void {
-    const status = this.getStatus();
-    if (status === "won" || status === "lost") {
-      throw new GameOverError(status === "won" ? GameStatus.Won : GameStatus.Lost);
+    // Check the status field directly, not the computed status
+    if (this.gameState.status !== GameStatus.Ongoing) {
+      throw new GameOverError(this.gameState.status);
     }
   }
 
@@ -238,6 +297,95 @@ export class OrchestratedGame {
   }
 
   /**
+   * Draw 2 player cards and resolve all consequences.
+   * Must be called during the Draw phase.
+   *
+   * This method:
+   * - Draws 2 cards from the player deck
+   * - Resolves epidemics immediately (increase rate, infect bottom card, intensify)
+   * - Adds non-epidemic cards to the current player's hand
+   * - Checks if hand limit is exceeded
+   * - Detects win/loss conditions
+   *
+   * @returns DrawOutcome with cards drawn, epidemics resolved, and hand limit status
+   * @throws InvalidPhaseError if not in Draw phase
+   * @throws GameOverError if the game has ended
+   */
+  drawCards(): DrawOutcome {
+    // Validate game is ongoing
+    this.validateGameOngoing();
+
+    // Validate we're in the Draw phase
+    if (this.gameState.phase !== TurnPhase.Draw) {
+      throw new InvalidPhaseError("drawCards", this.gameState.phase, TurnPhase.Draw);
+    }
+
+    // Track the top 2 cards of the deck before drawing
+    const topTwoCards = this.gameState.playerDeck.slice(0, 2);
+
+    // Call the engine's drawPlayerCards function
+    let drawResult: DrawCardsResult;
+    try {
+      drawResult = drawPlayerCards(this.gameState);
+    } catch (error) {
+      // The engine throws regular errors for game-ending conditions
+      // We need to catch those and convert them or handle them appropriately
+      if (error instanceof Error && error.message.includes("game has ended")) {
+        throw new GameOverError(this.gameState.status);
+      }
+      throw error;
+    }
+
+    // Update internal game state
+    this.gameState = drawResult.state;
+
+    // Get the updated game status from the state
+    // (don't re-compute with getGameStatus, use the status from drawResult)
+    const gameStatus = this.gameState.status;
+
+    // Build the list of drawn cards by examining the top 2 cards we tracked
+    const cardsDrawn: DrawnCard[] = [];
+
+    for (const card of topTwoCards) {
+      if (card && card.type !== "epidemic") {
+        if (card.type === "city") {
+          cardsDrawn.push({
+            name: card.city,
+            type: "city",
+            color: card.color,
+          });
+        } else if (card.type === "event") {
+          cardsDrawn.push({
+            name: card.event,
+            type: "event",
+          });
+        }
+      }
+    }
+
+    // Convert epidemic information
+    const epidemics: EpidemicInfo[] = drawResult.epidemics.map((epi) => ({
+      infectedCity: epi.infectedCity,
+      infectedColor: epi.infectedColor,
+      infectionRatePosition: epi.infectionRatePosition,
+    }));
+
+    // Check if hand limit is exceeded for current player
+    const updatedPlayer = getCurrentPlayer(this.gameState);
+    const needsDiscard = updatedPlayer.hand.length > 7;
+    const playersNeedingDiscard = needsDiscard ? [this.gameState.currentPlayerIndex] : [];
+
+    return {
+      state: this.gameState,
+      gameStatus,
+      cardsDrawn,
+      epidemics,
+      needsDiscard,
+      playersNeedingDiscard,
+    };
+  }
+
+  /**
    * Parse an action string and execute the corresponding action.
    * Action strings follow the format: "action-type:parameters"
    *
@@ -259,7 +407,7 @@ export class OrchestratedGame {
 
     // Validate we're in the Actions phase
     if (this.gameState.phase !== TurnPhase.Actions) {
-      throw new InvalidPhaseError(actionString, this.gameState.phase);
+      throw new InvalidPhaseError(actionString, this.gameState.phase, TurnPhase.Actions);
     }
 
     // Validate actions remaining
