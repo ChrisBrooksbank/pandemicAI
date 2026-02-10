@@ -322,3 +322,47 @@ export function oneQuietNight(state: GameState, eventPlayerIndex?: number): Even
     },
   };
 }
+
+/**
+ * Play the Resilient Population event card.
+ * Remove 1 card from the Infection discard pile (permanently removed from the game).
+ *
+ * @param state - The current game state
+ * @param cityName - Name of the city card to remove from infection discard
+ * @param eventPlayerIndex - Index of the player playing the event (defaults to current player)
+ * @returns EventResult with updated state or error message
+ */
+export function resilientPopulation(
+  state: GameState,
+  cityName: string,
+  eventPlayerIndex?: number,
+): EventResult {
+  // First, play the event card (handles validation and card removal)
+  const playResult = playEventCard(state, EventType.ResilientPopulation, eventPlayerIndex);
+  if (!playResult.success) {
+    return playResult;
+  }
+
+  // Check if the specified card exists in the infection discard pile
+  const cardIndex = playResult.state.infectionDiscard.findIndex((card) => card.city === cityName);
+
+  if (cardIndex === -1) {
+    return {
+      success: false,
+      error: `Cannot remove ${cityName} from infection discard: card not found in discard pile`,
+    };
+  }
+
+  // Remove the card from the infection discard pile (permanently removed from game)
+  const updatedInfectionDiscard = playResult.state.infectionDiscard.filter(
+    (_, index) => index !== cardIndex,
+  );
+
+  return {
+    success: true,
+    state: {
+      ...playResult.state,
+      infectionDiscard: updatedInfectionDiscard,
+    },
+  };
+}

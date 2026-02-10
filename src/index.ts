@@ -68,6 +68,7 @@ export {
   airlift,
   governmentGrant,
   oneQuietNight,
+  resilientPopulation,
   playEventCard,
   hasEventCard,
   type EventResult,
