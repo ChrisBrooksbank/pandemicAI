@@ -138,7 +138,7 @@
 - [x] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
 - [x] Implement phase auto-advancement (Actions→Draw→Infect→next player)
 - [x] Implement playEvent() for event cards playable during any phase
-- [ ] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
+- [x] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
 - [ ] Add error types (InvalidPhaseError, InvalidActionError, GameOverError)
 - [ ] Add unit tests for orchestrator phase transitions and outcome types
 - [ ] Add integration tests for complete game flows through orchestrator

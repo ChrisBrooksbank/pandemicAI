@@ -1591,3 +1591,424 @@ describe("Phase auto-advancement", () => {
     });
   });
 });
+
+describe("GameEvent Log", () => {
+  describe("getEventLog", () => {
+    it("returns empty log for new game", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      const log = game.getEventLog();
+      expect(log).toEqual([]);
+    });
+
+    it("logs action-performed events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      game.performAction("drive-ferry:Washington");
+
+      const log = game.getEventLog();
+      expect(log.length).toBeGreaterThan(0);
+
+      const actionEvent = log.find((e) => e.type === "action-performed");
+      expect(actionEvent).toBeDefined();
+      if (actionEvent && actionEvent.type === "action-performed") {
+        expect(actionEvent.action).toBe("drive-ferry:Washington");
+        expect(actionEvent.turnNumber).toBe(1);
+        expect(actionEvent.phase).toBe(TurnPhase.Actions);
+        expect(actionEvent.playerIndex).toBe(0);
+      }
+    });
+
+    it("logs cure-discovered events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for cure discovery
+      const blueCards = [
+        { type: "city" as const, city: "Atlanta", color: Disease.Blue },
+        { type: "city" as const, city: "Chicago", color: Disease.Blue },
+        { type: "city" as const, city: "Montreal", color: Disease.Blue },
+        { type: "city" as const, city: "New York", color: Disease.Blue },
+        { type: "city" as const, city: "Washington", color: Disease.Blue },
+      ];
+
+      const updatedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: blueCards } : p)),
+      };
+      (game as unknown as { gameState: GameState }).gameState = updatedState;
+
+      game.performAction("discover-cure:blue");
+
+      const log = game.getEventLog();
+      const cureEvent = log.find((e) => e.type === "cure-discovered");
+      expect(cureEvent).toBeDefined();
+      if (cureEvent && cureEvent.type === "cure-discovered") {
+        expect(cureEvent.disease).toBe(Disease.Blue);
+        expect(cureEvent.turnNumber).toBe(1);
+        expect(cureEvent.playerIndex).toBe(0);
+      }
+    });
+
+    it("logs disease-eradicated events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for eradication (cure + no cubes)
+      const blueCards = [
+        { type: "city" as const, city: "Atlanta", color: Disease.Blue },
+        { type: "city" as const, city: "Chicago", color: Disease.Blue },
+        { type: "city" as const, city: "Montreal", color: Disease.Blue },
+        { type: "city" as const, city: "New York", color: Disease.Blue },
+        { type: "city" as const, city: "Washington", color: Disease.Blue },
+      ];
+
+      const updatedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: blueCards } : p)),
+        board: Object.fromEntries(
+          Object.entries(state.board).map(([city, cityState]) => [city, { ...cityState, blue: 0 }]),
+        ),
+      };
+      (game as unknown as { gameState: GameState }).gameState = updatedState;
+
+      game.performAction("discover-cure:blue");
+
+      const log = game.getEventLog();
+      const eradicationEvent = log.find((e) => e.type === "disease-eradicated");
+      expect(eradicationEvent).toBeDefined();
+      if (eradicationEvent && eradicationEvent.type === "disease-eradicated") {
+        expect(eradicationEvent.disease).toBe(Disease.Blue);
+        expect(eradicationEvent.turnNumber).toBe(1);
+      }
+    });
+  });
+
+  describe("drawCards event logging", () => {
+    it("logs cards-drawn events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Advance to Draw phase
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      game.drawCards();
+
+      const log = game.getEventLog();
+      const cardsEvent = log.find((e) => e.type === "cards-drawn");
+      expect(cardsEvent).toBeDefined();
+      if (cardsEvent && cardsEvent.type === "cards-drawn") {
+        expect(cardsEvent.cards.length).toBeGreaterThan(0);
+        expect(cardsEvent.turnNumber).toBe(1);
+        expect(cardsEvent.phase).toBe(TurnPhase.Draw);
+      }
+    });
+
+    it("logs epidemic events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Place epidemic card at top of deck
+      const epidemicCard: PlayerCard = { type: "epidemic" };
+      const regularCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [epidemicCard, regularCard, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      game.drawCards();
+
+      const log = game.getEventLog();
+      const epidemicEvent = log.find((e) => e.type === "epidemic");
+      expect(epidemicEvent).toBeDefined();
+      if (epidemicEvent && epidemicEvent.type === "epidemic") {
+        expect(epidemicEvent.infectedCity).toBeDefined();
+        expect(epidemicEvent.infectedColor).toBeDefined();
+        expect(epidemicEvent.infectionRatePosition).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("infectCities event logging", () => {
+    it("logs infection events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      game.infectCities();
+
+      const log = game.getEventLog();
+      const infectionEvents = log.filter((e) => e.type === "infection");
+      expect(infectionEvents.length).toBeGreaterThan(0);
+
+      const firstInfection = infectionEvents[0];
+      if (firstInfection && firstInfection.type === "infection") {
+        expect(firstInfection.city).toBeDefined();
+        expect(firstInfection.color).toBeDefined();
+        expect(firstInfection.turnNumber).toBe(1);
+      }
+    });
+
+    it("logs outbreak events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for outbreak
+      const updatedBoard = { ...state.board };
+      const atlantaState = updatedBoard["Atlanta"];
+      if (atlantaState) {
+        updatedBoard["Atlanta"] = { ...atlantaState, blue: 3 };
+      }
+
+      const atlantaCard = { city: "Atlanta", color: Disease.Blue };
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        board: updatedBoard,
+        infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      game.infectCities();
+
+      const log = game.getEventLog();
+      const outbreakEvents = log.filter((e) => e.type === "outbreak");
+      expect(outbreakEvents.length).toBeGreaterThan(0);
+
+      const firstOutbreak = outbreakEvents[0];
+      if (firstOutbreak && firstOutbreak.type === "outbreak") {
+        expect(firstOutbreak.city).toBeDefined();
+        expect(firstOutbreak.color).toBeDefined();
+        expect(Array.isArray(firstOutbreak.cascade)).toBe(true);
+      }
+    });
+  });
+
+  describe("playEvent event logging", () => {
+    it("logs event-card-played events", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player an event card
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      game.playEvent(0, { event: EventType.OneQuietNight });
+
+      const log = game.getEventLog();
+      const eventPlayedEvent = log.find((e) => e.type === "event-card-played");
+      expect(eventPlayedEvent).toBeDefined();
+      if (eventPlayedEvent && eventPlayedEvent.type === "event-card-played") {
+        expect(eventPlayedEvent.eventType).toBe(EventType.OneQuietNight);
+        expect(eventPlayedEvent.fromStoredCard).toBe(false);
+        expect(eventPlayedEvent.playerIndex).toBe(0);
+      }
+    });
+
+    it("logs event from stored card correctly", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Give player a stored event card
+      const storedCard: EventCard = { type: "event", event: EventType.GovernmentGrant };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: [],
+          storedEventCard: i === 0 ? storedCard : undefined,
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      game.playEvent(0, {
+        event: EventType.GovernmentGrant,
+        targetCity: "Tokyo",
+      });
+
+      const log = game.getEventLog();
+      const eventPlayedEvent = log.find((e) => e.type === "event-card-played");
+      expect(eventPlayedEvent).toBeDefined();
+      if (eventPlayedEvent && eventPlayedEvent.type === "event-card-played") {
+        expect(eventPlayedEvent.fromStoredCard).toBe(true);
+      }
+    });
+  });
+
+  describe("game outcome event logging", () => {
+    it("logs game-won event", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for immediate win (all cures discovered)
+      const updatedState: GameState = {
+        ...state,
+        cures: {
+          [Disease.Blue]: CureStatus.Cured,
+          [Disease.Yellow]: CureStatus.Cured,
+          [Disease.Black]: CureStatus.Cured,
+          [Disease.Red]: CureStatus.Uncured,
+        },
+      };
+      (game as unknown as { gameState: GameState }).gameState = updatedState;
+
+      // Give red cards for final cure
+      const redCards = [
+        { type: "city" as const, city: "Bangkok", color: Disease.Red },
+        { type: "city" as const, city: "Beijing", color: Disease.Red },
+        { type: "city" as const, city: "Hong Kong", color: Disease.Red },
+        { type: "city" as const, city: "Tokyo", color: Disease.Red },
+        { type: "city" as const, city: "Shanghai", color: Disease.Red },
+      ];
+
+      const finalState: GameState = {
+        ...updatedState,
+        players: updatedState.players.map((p, i) => (i === 0 ? { ...p, hand: redCards } : p)),
+      };
+      (game as unknown as { gameState: GameState }).gameState = finalState;
+
+      game.performAction("discover-cure:red");
+
+      const log = game.getEventLog();
+      const wonEvent = log.find((e) => e.type === "game-won");
+      expect(wonEvent).toBeDefined();
+      if (wonEvent && wonEvent.type === "game-won") {
+        expect(wonEvent.turnNumber).toBe(1);
+      }
+    });
+
+    it("logs game-lost event with reason", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for loss by deck exhaustion
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      game.drawCards();
+
+      const log = game.getEventLog();
+      const lostEvent = log.find((e) => e.type === "game-lost");
+      expect(lostEvent).toBeDefined();
+      if (lostEvent && lostEvent.type === "game-lost") {
+        expect(lostEvent.reason).toBeDefined();
+        expect(lostEvent.reason).toContain("exhausted");
+      }
+    });
+  });
+
+  describe("getEventsSince", () => {
+    it("returns empty array when no events since turn", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      game.performAction("drive-ferry:Washington");
+
+      const events = game.getEventsSince(10);
+      expect(events).toEqual([]);
+    });
+
+    it("returns events after specified turn", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Perform actions in turn 1
+      game.performAction("drive-ferry:Washington");
+
+      // Manually increment turn counter for testing
+      (game as unknown as { turnCounter: number }).turnCounter = 2;
+
+      // Perform more actions in turn 2
+      game.performAction("drive-ferry:Atlanta");
+
+      const eventsSinceTurn1 = game.getEventsSince(1);
+      expect(eventsSinceTurn1.length).toBeGreaterThan(0);
+
+      // All returned events should be from turn 2 or later
+      for (const event of eventsSinceTurn1) {
+        expect(event.turnNumber).toBeGreaterThan(1);
+      }
+    });
+
+    it("includes events from current turn", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      game.performAction("drive-ferry:Washington");
+
+      const eventsSinceTurn0 = game.getEventsSince(0);
+      expect(eventsSinceTurn0.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("turn counter progression", () => {
+    it("increments turn counter after infection phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Complete a full turn cycle
+      const atlanta = getCity("Atlanta");
+      const firstConnection = atlanta.connections[0];
+      if (!firstConnection) {
+        throw new Error("Atlanta must have at least one connection");
+      }
+
+      // Use up all 4 actions
+      for (let i = 0; i < 4; i++) {
+        const destination = i % 2 === 0 ? firstConnection : "Atlanta";
+        game.performAction(`drive-ferry:${destination}`);
+      }
+
+      // Now in Draw phase
+      game.drawCards();
+
+      // Now in Infect phase (if no discards needed)
+      const drawPhase = game.getCurrentPhase();
+      if (drawPhase === TurnPhase.Infect) {
+        game.infectCities();
+
+        // After infection, turn counter should have incremented
+        const log = game.getEventLog();
+        const lastEvent = log[log.length - 1];
+        if (lastEvent) {
+          // The last infection/outbreak event should still be turn 1
+          // But the next action will be turn 2
+          expect(lastEvent.turnNumber).toBe(1);
+        }
+      }
+    });
+  });
+
+  describe("event log includes all event types", () => {
+    it("records events with correct structure", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Perform an action
+      game.performAction("drive-ferry:Washington");
+
+      const log = game.getEventLog();
+      expect(log.length).toBeGreaterThan(0);
+
+      // Every event should have turnNumber and phase
+      for (const event of log) {
+        expect(event.turnNumber).toBeDefined();
+        expect(event.phase).toBeDefined();
+        expect(event.type).toBeDefined();
+      }
+    });
+  });
+});

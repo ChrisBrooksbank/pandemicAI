@@ -89,4 +89,5 @@ export {
   type InfectOutcome,
   type InfectedCity,
   type OutbreakInfo,
+  type GameEvent,
 } from "./orchestrator";

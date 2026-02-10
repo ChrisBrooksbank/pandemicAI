@@ -50,6 +50,135 @@ import {
 export type OrchestratedGameStatus = "setup" | "playing" | "won" | "lost";
 
 /**
+ * Base interface for all game events
+ */
+interface BaseGameEvent {
+  /** The turn number when this event occurred */
+  turnNumber: number;
+  /** The phase when this event occurred */
+  phase: TurnPhase;
+  /** The player index who caused this event (if applicable) */
+  playerIndex?: number;
+}
+
+/**
+ * Event emitted when a player action is performed
+ */
+interface ActionPerformedEvent extends BaseGameEvent {
+  type: "action-performed";
+  /** The action string that was performed */
+  action: string;
+  /** Side effects that occurred */
+  sideEffects: ActionSideEffects;
+}
+
+/**
+ * Event emitted when cards are drawn
+ */
+interface CardsDrawnEvent extends BaseGameEvent {
+  type: "cards-drawn";
+  /** The cards that were drawn */
+  cards: DrawnCard[];
+}
+
+/**
+ * Event emitted when an epidemic occurs
+ */
+interface EpidemicEvent extends BaseGameEvent {
+  type: "epidemic";
+  /** The city that was infected */
+  infectedCity: string;
+  /** The disease color that spread */
+  infectedColor: DiseaseColor;
+  /** New infection rate position */
+  infectionRatePosition: number;
+}
+
+/**
+ * Event emitted when cities are infected
+ */
+interface InfectionEvent extends BaseGameEvent {
+  type: "infection";
+  /** The city that was infected */
+  city: string;
+  /** The disease color placed */
+  color: DiseaseColor;
+}
+
+/**
+ * Event emitted when an outbreak occurs
+ */
+interface OutbreakEvent extends BaseGameEvent {
+  type: "outbreak";
+  /** The city where the outbreak occurred */
+  city: string;
+  /** The disease color that outbroke */
+  color: DiseaseColor;
+  /** Cities affected in the cascade */
+  cascade: string[];
+}
+
+/**
+ * Event emitted when a cure is discovered
+ */
+interface CureDiscoveredEvent extends BaseGameEvent {
+  type: "cure-discovered";
+  /** The disease that was cured */
+  disease: DiseaseColor;
+}
+
+/**
+ * Event emitted when a disease is eradicated
+ */
+interface DiseaseEradicatedEvent extends BaseGameEvent {
+  type: "disease-eradicated";
+  /** The disease that was eradicated */
+  disease: DiseaseColor;
+}
+
+/**
+ * Event emitted when an event card is played
+ */
+interface EventCardPlayedEvent extends BaseGameEvent {
+  type: "event-card-played";
+  /** The type of event that was played */
+  eventType: EventType;
+  /** Whether it was from a stored card */
+  fromStoredCard: boolean;
+}
+
+/**
+ * Event emitted when the game is won
+ */
+interface GameWonEvent extends BaseGameEvent {
+  type: "game-won";
+}
+
+/**
+ * Event emitted when the game is lost
+ */
+interface GameLostEvent extends BaseGameEvent {
+  type: "game-lost";
+  /** The reason for the loss */
+  reason: string;
+}
+
+/**
+ * Discriminated union of all game event types
+ */
+export type GameEvent =
+  | ActionPerformedEvent
+  | CardsDrawnEvent
+  | EpidemicEvent
+  | InfectionEvent
+  | OutbreakEvent
+  | CureDiscoveredEvent
+  | DiseaseEradicatedEvent
+  | EventCardPlayedEvent
+  | GameWonEvent
+  | GameLostEvent;
+
+/**
  * Error thrown when attempting actions on a completed game
  */
 export class GameOverError extends Error {
@@ -227,6 +356,8 @@ export interface EventOutcome {
 export class OrchestratedGame {
   private gameState: GameState;
   private orchestratedStatus: OrchestratedGameStatus;
+  private eventLog: GameEvent[];
+  private turnCounter: number;
 
   /**
    * Private constructor - use startGame() to create instances
@@ -234,6 +365,8 @@ export class OrchestratedGame {
   private constructor(gameState: GameState) {
     this.gameState = gameState;
     this.orchestratedStatus = "playing";
+    this.eventLog = [];
+    this.turnCounter = 1;
   }
 
   /**
@@ -312,6 +445,43 @@ export class OrchestratedGame {
   }
 
   /**
+   * Get the full game event log.
+   * Returns all events that have occurred during the game in chronological order.
+   *
+   * @returns Array of all game events
+   */
+  getEventLog(): readonly GameEvent[] {
+    return this.eventLog;
+  }
+
+  /**
+   * Get game events that occurred since a specific turn number.
+   * Useful for incremental UI updates.
+   *
+   * @param turnNumber - The turn number to start from (exclusive)
+   * @returns Array of events that occurred after the specified turn
+   */
+  getEventsSince(turnNumber: number): readonly GameEvent[] {
+    return this.eventLog.filter((event) => event.turnNumber > turnNumber);
+  }
+
+  /**
+   * Add an event to the log.
+   * Internal helper method to record game events.
+   *
+   * @param event - The event to log (turnNumber and phase will be added automatically)
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private logEvent(event: any): void {
+    const fullEvent = {
+      ...event,
+      turnNumber: this.turnCounter,
+      phase: this.gameState.phase,
+    };
+    this.eventLog.push(fullEvent as GameEvent);
+  }
+
+  /**
    * Validate that the game is still in progress.
    * Throws GameOverError if the game has ended.
    *
@@ -323,6 +493,29 @@ export class OrchestratedGame {
     if (this.gameState.status !== GameStatus.Ongoing) {
       throw new GameOverError(this.gameState.status);
     }
+  }
+
+  /**
+   * Determine the reason for game loss based on current state.
+   * Used for logging game-lost events with helpful context.
+   *
+   * @returns A string describing why the game was lost
+   */
+  private determineGameLossReason(): string {
+    if (this.gameState.outbreakCount >= 8) {
+      return "8 outbreaks occurred";
+    }
+    if (this.gameState.playerDeck.length === 0) {
+      return "Player deck exhausted";
+    }
+    const colors: DiseaseColor[] = [Disease.Blue, Disease.Yellow, Disease.Black, Disease.Red];
+    for (const color of colors) {
+      const supply = this.gameState.cubeSupply[color];
+      if (supply !== undefined && supply <= 0) {
+        return `${color} cube supply exhausted`;
+      }
+    }
+    return "Unknown loss condition";
   }
 
   /**
@@ -444,6 +637,35 @@ export class OrchestratedGame {
       infectionRatePosition: epi.infectionRatePosition,
     }));
 
+    // Log cards drawn event
+    if (cardsDrawn.length > 0) {
+      this.logEvent({
+        type: "cards-drawn",
+        cards: cardsDrawn,
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
+    // Log epidemic events
+    for (const epidemic of epidemics) {
+      this.logEvent({
+        type: "epidemic",
+        infectedCity: epidemic.infectedCity,
+        infectedColor: epidemic.infectedColor,
+        infectionRatePosition: epidemic.infectionRatePosition,
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
+    // Log game lost event if it occurred during draw
+    if (gameStatus === GameStatus.Lost) {
+      this.logEvent({
+        type: "game-lost",
+        reason: this.determineGameLossReason(),
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
     // Check if hand limit is exceeded for current player
     const updatedPlayer = getCurrentPlayer(this.gameState);
     const needsDiscard = updatedPlayer.hand.length > 7;
@@ -550,9 +772,41 @@ export class OrchestratedGame {
     // Calculate cubes placed by comparing cube supplies
     const cubesPlaced = citiesInfected.length; // Simplified: 1 cube per card drawn
 
+    // Log infection events
+    for (const infected of citiesInfected) {
+      this.logEvent({
+        type: "infection",
+        city: infected.city,
+        color: infected.color,
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
+    // Log outbreak events
+    for (const outbreak of outbreaks) {
+      this.logEvent({
+        type: "outbreak",
+        city: outbreak.city,
+        color: outbreak.color,
+        cascade: outbreak.cascade,
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
+    // Log game lost event if it occurred during infection
+    if (gameStatus === GameStatus.Lost) {
+      this.logEvent({
+        type: "game-lost",
+        reason: this.determineGameLossReason(),
+        playerIndex: this.gameState.currentPlayerIndex,
+      });
+    }
+
     // Auto-advance to next player's Actions phase only if game is still ongoing
     if (gameStatus === GameStatus.Ongoing) {
       this.gameState = advancePhase(this.gameState);
+      // Increment turn counter when moving to next player
+      this.turnCounter++;
     }
 
     return {
@@ -694,6 +948,14 @@ export class OrchestratedGame {
 
     // Get the updated game status
     const gameStatus = getGameStatus(this.gameState);
+
+    // Log the event card played event
+    this.logEvent({
+      type: "event-card-played",
+      eventType: params.event,
+      fromStoredCard,
+      playerIndex,
+    });
 
     // Return the outcome (no phase advancement, no action consumption)
     return {
@@ -903,6 +1165,53 @@ export class OrchestratedGame {
 
     // Get the updated game status
     const gameStatus = getGameStatus(this.gameState);
+
+    // Log the action performed event
+    this.logEvent({
+      type: "action-performed",
+      action: actionString,
+      sideEffects,
+      playerIndex: oldState.currentPlayerIndex,
+    });
+
+    // Log cure discovery if it happened
+    const colors: DiseaseColor[] = [Disease.Blue, Disease.Yellow, Disease.Black, Disease.Red];
+    for (const color of colors) {
+      const oldCure = oldState.cures[color];
+      const newCure = this.gameState.cures[color];
+      if (oldCure === CureStatus.Uncured && newCure === CureStatus.Cured) {
+        this.logEvent({
+          type: "cure-discovered",
+          disease: color,
+          playerIndex: oldState.currentPlayerIndex,
+        });
+      }
+    }
+
+    // Log eradication events
+    if (sideEffects.diseasesEradicated) {
+      for (const disease of sideEffects.diseasesEradicated) {
+        this.logEvent({
+          type: "disease-eradicated",
+          disease,
+          playerIndex: oldState.currentPlayerIndex,
+        });
+      }
+    }
+
+    // Log game won/lost events
+    if (gameStatus === GameStatus.Won) {
+      this.logEvent({
+        type: "game-won",
+        playerIndex: oldState.currentPlayerIndex,
+      });
+    } else if (gameStatus === GameStatus.Lost) {
+      this.logEvent({
+        type: "game-lost",
+        reason: this.determineGameLossReason(),
+        playerIndex: oldState.currentPlayerIndex,
+      });
+    }
 
     // Auto-advance to Draw phase if no actions remaining and game is still ongoing
     if (this.gameState.actionsRemaining === 0 && gameStatus === GameStatus.Ongoing) {
