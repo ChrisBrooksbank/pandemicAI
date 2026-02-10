@@ -2,8 +2,8 @@
 
 ## Status
 
-- Planning iterations: 1
-- Build iterations: 50
+- Planning iterations: 2
+- Build iterations: 54
 - Last updated: 2026-02-10
 
 ## Tasks
@@ -129,11 +129,94 @@
 - [x] Add JSDoc comments to all public API functions
 - [x] Run full npm run check and fix any remaining issues (iteration 50: fixed ~10 flaky tests related to random card deals and Medic passive ability; occasional flakiness remains - see Known Issues)
 
+### Phase 16: Game Orchestration (Spec: game-orchestration.md)
+
+- [ ] Create OrchestratedGame class wrapping GameState (spec: game-orchestration.md)
+- [ ] Implement game lifecycle methods: startGame(), getCurrentPhase(), getCurrentPlayer(), getActionsRemaining()
+- [ ] Implement performAction() with ActionOutcome discriminated union type
+- [ ] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
+- [ ] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
+- [ ] Implement phase auto-advancement (Actions→Draw→Infect→next player)
+- [ ] Implement playEvent() for event cards playable during any phase
+- [ ] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
+- [ ] Add error types (InvalidPhaseError, InvalidActionError, GameOverError)
+- [ ] Add unit tests for orchestrator phase transitions and outcome types
+- [ ] Add integration tests for complete game flows through orchestrator
+
+### Phase 17: AI Bot Players (Spec: ai-bot-players.md)
+
+- [ ] Define Bot interface (chooseAction, chooseDiscards, chooseForecastOrder)
+- [ ] Implement RandomBot (selects random actions for baseline/fuzz-testing)
+- [ ] Implement PriorityBot with rule-based strategy (treat 3-cube cities, discover cures, move to threats)
+- [ ] Implement HeuristicBot with scored actions (disease threat, cure progress, station coverage, etc.)
+- [ ] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
+- [ ] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
+- [ ] Add BotPlayerConfig for mixed human/bot games
+- [ ] Add BotDecision diagnostics with score breakdowns for heuristic bot
+- [ ] Add unit tests for all bot strategies
+- [ ] Add integration tests: RandomBot 100 games (no crashes), PriorityBot 10%+ win rate on 4-epidemic difficulty
+
+### Phase 18: Serialization & Persistence (Spec: serialization-persistence.md)
+
+- [ ] Implement serializeGame() and deserializeGame() with schema versioning
+- [ ] Add schema validation on deserialization with clear error messages
+- [ ] Implement SaveSlot type and SavePreview for save/load UI
+- [ ] Define StorageBackend interface (save, load, list, delete)
+- [ ] Implement LocalStorageBackend for browser-based storage
+- [ ] Implement FileSystemBackend for Node.js CLI/testing scenarios
+- [ ] Implement InMemoryBackend for testing
+- [ ] Implement saveGame(), loadGame(), listSaves(), deleteSave() with injectable backend
+- [ ] Implement GameHistory type and pushState(), undo(), redo() functions
+- [ ] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)
+- [ ] Implement GameReplay type (initial state + action sequence)
+- [ ] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
+- [ ] Add replay recording during live games (opt-in)
+- [ ] Add JSON export/import for replay sharing
+- [ ] Add unit tests for serialization round-trip fidelity
+- [ ] Add integration tests for save/load, undo/redo, and replay workflows
+
+### Phase 19: Web UI (Spec: web-ui.md)
+
+- [ ] Create React 19 + Vite 6 project in web/ subdirectory with @engine path alias
+- [ ] Set up useReducer hook wrapping engine functions (AppState with gameState, dialog, etc.)
+- [ ] Create SetupScreen component (player count, difficulty selectors, start button)
+- [ ] Create SVG WorldMap component (1200x700 viewBox, 48 cities with connections)
+- [ ] Add disease cubes, research stations, and player pawns to SVG map
+- [ ] Add city click handlers for movement and action targeting
+- [ ] Create StatusBar component (outbreak track, infection rate, cure indicators, cube supplies)
+- [ ] Create PlayerPanel component (role, phase indicator, hand display, other player tabs)
+- [ ] Create ActionBar component with phase-specific UI (Actions/Draw/Infect buttons)
+- [ ] Implement action parser utility (parseAction, groupActionsByType, getMovementDestinations)
+- [ ] Create all dialogs: DiscardDialog, EpidemicOverlay, ShareKnowledgeDialog, DiscoverCureDialog, ForecastDialog, AirliftDialog, GovernmentGrantDialog, ResilientPopulationDialog, GameOverDialog
+- [ ] Add event card menu (playable anytime, any phase)
+- [ ] Add CSS styling with dark theme
+- [ ] Add integration tests for full game playthrough in web UI
+
 ## Completed
 
 <!-- Completed tasks move here -->
 
 ## Notes
+
+### Gap Analysis (Planning Iteration 2)
+
+**What's Fully Implemented (Phases 1-15):**
+- ✅ Core game engine: types, board data, game initialization
+- ✅ All 8 player actions (movement, build, treat, share, cure)
+- ✅ Infection phase with outbreak mechanics and chain reactions
+- ✅ Epidemic resolution (3-step process)
+- ✅ All 7 role abilities (Medic, Scientist, Researcher, Operations Expert, Quarantine Specialist, Dispatcher, Contingency Planner)
+- ✅ All 5 event cards (Airlift, Forecast, Government Grant, One Quiet Night, Resilient Population)
+- ✅ Win/loss condition detection
+- ✅ Comprehensive test coverage (~4000 lines of implementation)
+
+**What Needs Implementation (Phases 16-19):**
+- ❌ Game Orchestration (spec: game-orchestration.md) - High-level wrapper API for UI/bot integration
+- ❌ AI Bot Players (spec: ai-bot-players.md) - 3 bot strategies for solo play and testing
+- ❌ Serialization & Persistence (spec: serialization-persistence.md) - Save/load, undo/redo, replay
+- ❌ Web UI (spec: web-ui.md) - React-based browser interface with SVG world map
+
+**Current State:** The core Pandemic engine is complete and production-ready. All game rules are correctly implemented. The remaining work is building higher-level features on top of the solid engine foundation.
 
 ### Architectural Decisions
 
@@ -145,11 +228,24 @@
 
 ### Build Dependencies
 
+**Completed Foundation (Phases 1-15):**
 - Phase 1-2 must complete before Phase 3 (need types and initialization before queries)
 - Phase 3-6 must complete before Phase 7 (need actions before turn structure)
 - Phase 8-9 must complete before Phase 10 (need infection logic before epidemics)
 - Phase 11 requires all previous phases (win/loss detection needs complete game mechanics)
 - Phase 12-14 can start after Phase 11 (roles/events modify existing mechanics)
+
+**New Work (Phases 16-19):**
+- Phase 16 (Orchestration) should be implemented first - provides high-level API for other phases
+- Phase 17 (Bots) depends on Phase 16 - bots use orchestrator API
+- Phase 18 (Serialization) is independent - can be done in parallel with Phase 16/17
+- Phase 19 (Web UI) depends on Phase 16 - UI uses orchestrator + serialization
+
+**Recommended Order:**
+1. Phase 16: Game Orchestration (foundation for UI and bots)
+2. Phase 18: Serialization & Persistence (parallel track, enables save/load)
+3. Phase 17: AI Bot Players (uses orchestrator, enables solo play)
+4. Phase 19: Web UI (final integration layer, uses orchestrator + serialization)
 
 ### Known Issues
 
