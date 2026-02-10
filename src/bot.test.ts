@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { Bot } from "./bot";
-import { RandomBot, PriorityBot } from "./bot";
+import { RandomBot, PriorityBot, HeuristicBot, DEFAULT_HEURISTIC_WEIGHTS } from "./bot";
 import { createGame } from "./game";
 import { getAvailableActions } from "./game";
 import type { GameState, InfectionCard, CityCard, EventCard } from "./types";
@@ -400,6 +400,513 @@ describe("RandomBot", () => {
       const ordered = bot.chooseForecastOrder(cards);
 
       expect(ordered).toEqual(cards);
+    });
+  });
+});
+
+describe("HeuristicBot", () => {
+  describe("constructor", () => {
+    it("should accept custom weights", () => {
+      const customWeights = {
+        diseaseThreat: 2.0,
+        cureProgress: 1.5,
+        stationCoverage: 0.5,
+        infectionDeckDanger: 1.0,
+        roleSynergy: 0.8,
+      };
+
+      const bot = new HeuristicBot(customWeights);
+      expect(bot).toBeDefined();
+    });
+
+    it("should use default weights when not provided", () => {
+      const bot = new HeuristicBot();
+      expect(bot).toBeDefined();
+    });
+  });
+
+  describe("chooseAction", () => {
+    it("should choose an action from available actions", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(typeof chosenAction).toBe("string");
+      expect(actions).toContain(chosenAction);
+    });
+
+    it("should prioritize treating cities with 3 cubes (high outbreak risk)", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const atlantaState = state.board["Atlanta"];
+      if (!atlantaState) throw new Error("Atlanta not found");
+
+      // Set up Atlanta with 3 blue cubes (high threat)
+      state.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 3,
+      };
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [],
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should strongly prefer treating the 3-cube city
+      expect(chosenAction).toBe("treat:blue");
+    });
+
+    it("should prioritize discovering cures when at research station with enough cards", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+      ];
+
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: blueCards,
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should choose to discover cure (high value action)
+      expect(chosenAction).toBe("discover-cure:blue");
+    });
+
+    it("should move toward research station when holding enough cards for cure", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Paris", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+        { type: "city", city: "London", color: Disease.Blue },
+      ];
+
+      // Place player in Chicago (adjacent to Atlanta which has research station)
+      state.players[0] = {
+        ...player,
+        location: "Chicago",
+        hand: blueCards,
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should move toward Atlanta (research station) to discover cure
+      // Could be drive-ferry or direct flight depending on scoring
+      expect(chosenAction).toMatch(/^(drive-ferry:Atlanta|direct-flight:)/);
+    });
+
+    it("should give higher scores to Medic treating cured diseases", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const atlantaState = state.board["Atlanta"];
+      if (!atlantaState) throw new Error("Atlanta not found");
+
+      // Mark blue as cured
+      state.cures.blue = "cured";
+
+      // Atlanta has 2 blue cubes
+      state.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 2,
+      };
+
+      state.players[0] = {
+        ...player,
+        role: Role.Medic,
+        location: "Atlanta",
+        hand: [],
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Medic treating cured disease should have high score
+      expect(chosenAction).toBe("treat:blue");
+    });
+
+    it("should give bonus to Scientist discovering cures", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const blueCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+      ];
+
+      state.players[0] = {
+        ...player,
+        role: Role.Scientist,
+        location: "Atlanta",
+        hand: blueCards,
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Scientist should strongly prefer discovering cure with 4 cards
+      expect(chosenAction).toBe("discover-cure:blue");
+    });
+
+    it("should consider infection deck danger for move actions", () => {
+      const bot = new HeuristicBot({ ...DEFAULT_HEURISTIC_WEIGHTS, infectionDeckDanger: 2.0 });
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Add Chicago to infection discard pile
+      state.infectionDiscardPile = [
+        { city: "Chicago", color: Disease.Blue },
+        { city: "Montreal", color: Disease.Blue },
+      ];
+
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [],
+      };
+
+      const actions = ["drive-ferry:Chicago", "drive-ferry:Washington"];
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should consider Chicago higher value due to infection discard
+      expect(chosenAction).toBe("drive-ferry:Chicago");
+    });
+
+    it("should score One Quiet Night higher when infection rate is high", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Set high infection rate
+      state.infectionRatePosition = 6;
+
+      const oneQuietNightCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [oneQuietNightCard],
+      };
+
+      const actions = ["event:one-quiet-night", "drive-ferry:Chicago"];
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Should prefer One Quiet Night at high infection rate
+      expect(chosenAction).toBe("event:one-quiet-night");
+    });
+
+    it("should give bonus to Operations Expert building stations", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      state.players[0] = {
+        ...player,
+        role: Role.OperationsExpert,
+        location: "Chicago",
+        hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+      };
+
+      const actions = ["build", "drive-ferry:Atlanta"];
+      const chosenAction = bot.chooseAction(state, actions);
+
+      // Operations Expert should value building (doesn't cost a card)
+      expect(chosenAction).toBe("build");
+    });
+
+    it("should handle empty action list", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions: string[] = [];
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(chosenAction).toBe("");
+    });
+
+    it("should return valid action from available actions", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      expect(typeof chosenAction).toBe("string");
+      expect(actions).toContain(chosenAction);
+    });
+  });
+
+  describe("chooseDiscards", () => {
+    it("should discard cards with fewest same-color duplicates", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Give player: 3 blue cards, 2 yellow cards, 1 red card, 1 black card
+      const cards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "Lagos", color: Disease.Yellow },
+        { type: "city", city: "Kinshasa", color: Disease.Yellow },
+        { type: "city", city: "Tokyo", color: Disease.Red },
+        { type: "city", city: "Beijing", color: Disease.Black },
+      ];
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 2);
+
+      expect(discardIndices).toHaveLength(2);
+      // Should discard the single cards (red and black) over cards with more duplicates
+      expect(discardIndices).toContain(5); // Red
+      expect(discardIndices).toContain(6); // Black
+    });
+
+    it("should keep event cards (high score)", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const cards: PlayerCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "event", event: EventType.Airlift },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "event", event: EventType.Forecast },
+      ];
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 2);
+
+      expect(discardIndices).toHaveLength(2);
+      // Should discard city cards, not event cards
+      expect(discardIndices).not.toContain(1); // Airlift
+      expect(discardIndices).not.toContain(3); // Forecast
+    });
+
+    it("should keep cards close to cure threshold", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // 4 blue cards (close to cure) + 1 red card
+      const cards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Tokyo", color: Disease.Red },
+      ];
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 1);
+
+      expect(discardIndices).toHaveLength(1);
+      // Should discard the red card, keep blue cards (close to cure)
+      expect(discardIndices).toContain(4);
+    });
+
+    it("should return sorted indices", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      const cards: CityCard[] = Array.from({ length: 7 }, (_, i) => ({
+        type: "city" as const,
+        city: `City${i}`,
+        color: i % 2 === 0 ? Disease.Blue : Disease.Red,
+      }));
+
+      state.players[0] = {
+        ...player,
+        hand: cards,
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 3);
+
+      expect(discardIndices).toHaveLength(3);
+      // Indices should be sorted
+      for (let i = 1; i < discardIndices.length; i++) {
+        const prev = discardIndices[i - 1];
+        const curr = discardIndices[i];
+        if (prev !== undefined && curr !== undefined) {
+          expect(prev).toBeLessThan(curr);
+        }
+      }
+    });
+
+    it("should handle invalid player index", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const discardIndices = bot.chooseDiscards(state, 99, 2);
+
+      expect(discardIndices).toEqual([]);
+    });
+
+    it("should handle empty hand", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      state.players[0] = {
+        ...player,
+        hand: [],
+      };
+
+      const discardIndices = bot.chooseDiscards(state, 0, 2);
+
+      expect(discardIndices).toEqual([]);
+    });
+  });
+
+  describe("chooseForecastOrder", () => {
+    it("should return all cards", () => {
+      const bot = new HeuristicBot();
+
+      const cards: InfectionCard[] = [
+        { city: "Atlanta", color: Disease.Blue },
+        { city: "Chicago", color: Disease.Blue },
+        { city: "Lagos", color: Disease.Yellow },
+      ];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toHaveLength(cards.length);
+      expect(ordered.every((card) => cards.includes(card))).toBe(true);
+    });
+
+    it("should not duplicate or lose cards", () => {
+      const bot = new HeuristicBot();
+
+      const cards: InfectionCard[] = [
+        { city: "Atlanta", color: Disease.Blue },
+        { city: "Chicago", color: Disease.Blue },
+        { city: "Lagos", color: Disease.Yellow },
+      ];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toHaveLength(3);
+      expect(ordered.filter((c) => c.city === "Atlanta")).toHaveLength(1);
+      expect(ordered.filter((c) => c.city === "Chicago")).toHaveLength(1);
+      expect(ordered.filter((c) => c.city === "Lagos")).toHaveLength(1);
+    });
+
+    it("should handle empty card array", () => {
+      const bot = new HeuristicBot();
+      const cards: InfectionCard[] = [];
+
+      const ordered = bot.chooseForecastOrder(cards);
+
+      expect(ordered).toEqual([]);
+    });
+  });
+
+  describe("customizable weights", () => {
+    it("should allow tuning strategy with different weights", () => {
+      // Create bot that heavily prioritizes disease threat
+      const threatBot = new HeuristicBot({
+        diseaseThreat: 5.0,
+        cureProgress: 0.1,
+        stationCoverage: 0.1,
+        infectionDeckDanger: 0.1,
+        roleSynergy: 0.1,
+      });
+
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const player = state.players[0];
+      if (!player) throw new Error("Player not found");
+
+      // Create scenario with both treatment option and cure option
+      const atlantaState = state.board["Atlanta"];
+      if (!atlantaState) throw new Error("Atlanta not found");
+
+      state.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 2,
+      };
+
+      state.players[0] = {
+        ...player,
+        location: "Atlanta",
+        hand: [
+          { type: "city", city: "Chicago", color: Disease.Blue },
+          { type: "city", city: "Montreal", color: Disease.Blue },
+          { type: "city", city: "New York", color: Disease.Blue },
+          { type: "city", city: "Washington", color: Disease.Blue },
+          { type: "city", city: "London", color: Disease.Blue },
+        ],
+      };
+
+      const actions = getAvailableActions(state);
+      const chosenAction = threatBot.chooseAction(state, actions);
+
+      // With high threat weight, should still consider treating
+      expect(typeof chosenAction).toBe("string");
+      expect(actions).toContain(chosenAction);
     });
   });
 });

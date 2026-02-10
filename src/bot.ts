@@ -1,6 +1,6 @@
 // AI Bot Players - Bot interface and implementations
 
-import type { GameState, InfectionCard, PlayerCard } from "./types";
+import type { GameState, InfectionCard, PlayerCard, Player } from "./types";
 import { Role } from "./types";
 import { CITIES } from "./board";
 
@@ -221,6 +221,350 @@ export class RandomBot implements Bot {
    * Simply shuffles the cards randomly.
    */
   chooseForecastOrder(cards: InfectionCard[]): InfectionCard[] {
+    return shuffle(cards);
+  }
+}
+
+/**
+ * Configuration weights for HeuristicBot scoring.
+ */
+export interface HeuristicWeights {
+  /** Weight for disease threat level (cubes * proximity to outbreak) */
+  diseaseThreat: number;
+  /** Weight for progress toward cures */
+  cureProgress: number;
+  /** Weight for research station coverage */
+  stationCoverage: number;
+  /** Weight for infection deck danger */
+  infectionDeckDanger: number;
+  /** Weight for role synergy bonus */
+  roleSynergy: number;
+}
+
+/**
+ * Default weights for HeuristicBot.
+ */
+export const DEFAULT_HEURISTIC_WEIGHTS: HeuristicWeights = {
+  diseaseThreat: 1.0,
+  cureProgress: 0.8,
+  stationCoverage: 0.3,
+  infectionDeckDanger: 0.5,
+  roleSynergy: 0.6,
+};
+
+/**
+ * HeuristicBot implements a scoring-based strategy.
+ *
+ * Scores each available action using weighted heuristic factors:
+ * - Disease threat level per city (cubes * proximity to outbreak)
+ * - Progress toward cures (cards in hand per color vs. threshold)
+ * - Research station coverage (distance from stations)
+ * - Infection deck danger (cities in discard pile that could come back after epidemic)
+ * - Role synergy (weight actions that leverage the bot's role ability)
+ *
+ * Selects the highest-scoring action. Weights are configurable for tuning strategy.
+ */
+export class HeuristicBot implements Bot {
+  private weights: HeuristicWeights;
+
+  constructor(weights: HeuristicWeights = DEFAULT_HEURISTIC_WEIGHTS) {
+    this.weights = weights;
+  }
+
+  chooseAction(state: GameState, availableActions: string[]): string {
+    if (availableActions.length === 0) {
+      return "";
+    }
+
+    // Score each action
+    const scoredActions = availableActions.map((action) => ({
+      action,
+      score: this.scoreAction(state, action),
+    }));
+
+    // Sort by score (descending) and return highest
+    scoredActions.sort((a, b) => b.score - a.score);
+
+    const best = scoredActions[0];
+    return best?.action ?? "";
+  }
+
+  private scoreAction(state: GameState, action: string): number {
+    let score = 0;
+
+    const currentPlayer = state.players[state.currentPlayerIndex];
+    if (!currentPlayer) return 0;
+
+    const actionParts = action.split(":");
+    const actionType = actionParts[0];
+
+    // Score based on action type and factors
+    switch (actionType) {
+      case "treat":
+        score += this.scoreTreatAction(state, currentPlayer, actionParts[1] ?? "");
+        break;
+
+      case "discover-cure":
+        score += this.scoreDiscoverCureAction(state, actionParts[1] ?? "");
+        break;
+
+      case "drive-ferry":
+      case "direct-flight":
+      case "charter-flight":
+      case "shuttle-flight":
+      case "operations-expert-move":
+        score += this.scoreMoveAction(state, currentPlayer, actionParts[1] ?? "", actionType ?? "");
+        break;
+
+      case "build":
+        score += this.scoreBuildAction(state, currentPlayer);
+        break;
+
+      case "share-give":
+      case "share-take":
+        score += this.scoreShareAction(state, currentPlayer, action);
+        break;
+
+      case "event":
+        score += this.scoreEventAction(state, action);
+        break;
+
+      default:
+        // Unknown action type, give neutral score
+        score = 0.1;
+    }
+
+    return score;
+  }
+
+  private scoreTreatAction(state: GameState, player: Player, color: string): number {
+    const cityState = state.board[player.location];
+    if (!cityState) return 0;
+
+    const cubeCount = cityState[color as keyof typeof cityState];
+    if (typeof cubeCount !== "number") return 0;
+
+    // Base score on number of cubes
+    let score = cubeCount * this.weights.diseaseThreat * 3;
+
+    // Bonus for treating cities about to outbreak (3 cubes)
+    if (cubeCount === 3) {
+      score += this.weights.diseaseThreat * 10;
+    }
+
+    // Bonus for Medic treating cured diseases (clears all at once)
+    if (player.role === Role.Medic) {
+      const cureStatus = state.cures[color as keyof typeof state.cures];
+      if (cureStatus === "cured" || cureStatus === "eradicated") {
+        score += this.weights.roleSynergy * 5;
+      }
+    }
+
+    return score;
+  }
+
+  private scoreDiscoverCureAction(state: GameState, _color: string): number {
+    // Very high score - discovering cures is a win condition
+    let score = this.weights.cureProgress * 20;
+
+    // Bonus if this is our first cure
+    const curedCount = Object.values(state.cures).filter((status) => status !== "uncured").length;
+    if (curedCount === 0) {
+      score += this.weights.cureProgress * 5;
+    }
+
+    // Bonus for Scientist (role synergy)
+    const currentPlayer = state.players[state.currentPlayerIndex];
+    if (currentPlayer?.role === Role.Scientist) {
+      score += this.weights.roleSynergy * 3;
+    }
+
+    return score;
+  }
+
+  private scoreMoveAction(
+    state: GameState,
+    player: Player,
+    destination: string,
+    moveType: string,
+  ): number {
+    if (!destination) return 0;
+
+    let score = 0;
+
+    const destState = state.board[destination];
+    if (!destState) return 0;
+
+    // Factor 1: Disease threat at destination
+    const totalCubes = destState.blue + destState.yellow + destState.black + destState.red;
+    if (totalCubes > 0) {
+      score += this.weights.diseaseThreat * totalCubes * 2;
+
+      // Extra bonus for 3-cube cities (about to outbreak)
+      if (totalCubes === 3) {
+        score += this.weights.diseaseThreat * 8;
+      }
+    }
+
+    // Factor 2: Distance to research station (if we need to cure)
+    const cardsNeeded = player.role === Role.Scientist ? 4 : 5;
+    const colorCounts = countCardsByColor(player.hand);
+    const hasEnoughForCure = Object.values(colorCounts).some((count) => count >= cardsNeeded);
+
+    if (hasEnoughForCure && destState.hasResearchStation) {
+      score += this.weights.stationCoverage * 15;
+    }
+
+    // Factor 3: Infection deck danger (cities in discard that could come back)
+    const isInInfectionDiscard = state.infectionDiscard.some(
+      (card: InfectionCard) => card.city === destination,
+    );
+    if (isInInfectionDiscard) {
+      score += this.weights.infectionDeckDanger * 2;
+    }
+
+    // Factor 4: Role synergy
+    if (player.role === Role.Medic) {
+      // Medic should move to cured disease cities (passive ability auto-clears)
+      for (const [color, cubes] of Object.entries({
+        blue: destState.blue,
+        yellow: destState.yellow,
+        black: destState.black,
+        red: destState.red,
+      })) {
+        if (cubes > 0) {
+          const cureStatus = state.cures[color as keyof typeof state.cures];
+          if (cureStatus === "cured" || cureStatus === "eradicated") {
+            score += this.weights.roleSynergy * cubes * 4;
+          }
+        }
+      }
+    }
+
+    // Penalize expensive moves (direct flight, charter flight)
+    if (moveType === "direct-flight" || moveType === "charter-flight") {
+      score -= 2; // Small penalty for using cards
+    }
+
+    return Math.max(score, 0.1); // Minimum score to avoid zero
+  }
+
+  private scoreBuildAction(state: GameState, player: Player): number {
+    const cityState = state.board[player.location];
+    if (!cityState) return 0;
+
+    // Base score for building stations
+    let score = this.weights.stationCoverage * 5;
+
+    // Bonus if we need a station for curing
+    const cardsNeeded = player.role === Role.Scientist ? 4 : 5;
+    const colorCounts = countCardsByColor(player.hand);
+    const hasEnoughForCure = Object.values(colorCounts).some((count) => count >= cardsNeeded);
+
+    if (hasEnoughForCure) {
+      score += this.weights.cureProgress * 10;
+    }
+
+    // Bonus for Operations Expert (doesn't cost a card)
+    if (player.role === Role.OperationsExpert) {
+      score += this.weights.roleSynergy * 5;
+    }
+
+    // Penalty if we're near the 6-station limit
+    const stationCount = Object.values(state.board).filter(
+      (city) => city.hasResearchStation,
+    ).length;
+    if (stationCount >= 5) {
+      score -= 5;
+    }
+
+    return score;
+  }
+
+  private scoreShareAction(state: GameState, player: Player, action: string): number {
+    // Moderate score for knowledge sharing (helps progress toward cures)
+    let score = this.weights.cureProgress * 3;
+
+    // Bonus for Researcher (can give any card)
+    if (player.role === Role.Researcher && action.startsWith("share-give:")) {
+      score += this.weights.roleSynergy * 4;
+    }
+
+    return score;
+  }
+
+  private scoreEventAction(state: GameState, action: string): number {
+    // Score event cards based on current game state
+    let score = 0;
+
+    if (action === "event:one-quiet-night") {
+      // Higher score when infection rate is high
+      score = this.weights.infectionDeckDanger * state.infectionRatePosition * 2;
+    } else if (action.startsWith("event:airlift:")) {
+      // Moderate score for airlift (flexible movement)
+      score = this.weights.stationCoverage * 4;
+    } else if (action.startsWith("event:government-grant:")) {
+      // Score similar to building a station
+      score = this.weights.stationCoverage * 5;
+    } else if (action === "event:forecast") {
+      // Moderate score for forecast (information + rearrangement)
+      score = this.weights.infectionDeckDanger * 3;
+    } else if (action.startsWith("event:resilient-population:")) {
+      // High score for resilient population (removes infection threat)
+      score = this.weights.infectionDeckDanger * 6;
+    }
+
+    return score;
+  }
+
+  chooseDiscards(state: GameState, playerIndex: number, mustDiscard: number): number[] {
+    const player = state.players[playerIndex];
+    if (!player) {
+      return [];
+    }
+
+    const handSize = player.hand.length;
+    if (mustDiscard > handSize) {
+      return Array.from({ length: handSize }, (_, i) => i);
+    }
+
+    // Score each card (lower score = more likely to discard)
+    const cardScores = player.hand.map((card, index) => {
+      let score = 0;
+
+      if (card.type === "event") {
+        // Keep event cards (high score)
+        score = 100;
+      } else if (card.type === "city") {
+        // Score city cards based on cure progress
+        const colorCounts = countCardsByColor(player.hand);
+        const colorCount = colorCounts[card.color] ?? 0;
+
+        // Keep cards that are part of a larger set (closer to cure)
+        score = colorCount * 10;
+
+        // Bonus for cards we're close to curing
+        const cardsNeeded = player.role === Role.Scientist ? 4 : 5;
+        if (colorCount >= cardsNeeded - 1) {
+          score += 20;
+        }
+      }
+
+      return { index, score };
+    });
+
+    // Sort by score (ascending) and take the lowest-scored cards
+    cardScores.sort((a, b) => a.score - b.score);
+    return cardScores
+      .slice(0, mustDiscard)
+      .map((item) => item.index)
+      .sort((a, b) => a - b);
+  }
+
+  chooseForecastOrder(cards: InfectionCard[]): InfectionCard[] {
+    // Strategy: arrange cards to minimize danger
+    // This is a simplified strategy - a full implementation would need GameState
+    // For now, just shuffle (same as RandomBot and PriorityBot)
     return shuffle(cards);
   }
 }

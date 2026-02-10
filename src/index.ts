@@ -91,4 +91,11 @@ export {
   type OutbreakInfo,
   type GameEvent,
 } from "./orchestrator";
-export { type Bot, RandomBot, PriorityBot } from "./bot";
+export {
+  type Bot,
+  RandomBot,
+  PriorityBot,
+  HeuristicBot,
+  type HeuristicWeights,
+  DEFAULT_HEURISTIC_WEIGHTS,
+} from "./bot";
