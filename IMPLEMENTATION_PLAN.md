@@ -133,7 +133,7 @@
 
 - [x] Create OrchestratedGame class wrapping GameState (spec: game-orchestration.md)
 - [x] Implement game lifecycle methods: startGame(), getCurrentPhase(), getCurrentPlayer(), getActionsRemaining()
-- [ ] Implement performAction() with ActionOutcome discriminated union type
+- [x] Implement performAction() with ActionOutcome discriminated union type
 - [ ] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
 - [ ] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
 - [ ] Implement phase auto-advancement (Actions→Draw→Infect→next player)
