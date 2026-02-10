@@ -131,7 +131,7 @@
 
 ### Phase 16: Game Orchestration (Spec: game-orchestration.md)
 
-- [ ] Create OrchestratedGame class wrapping GameState (spec: game-orchestration.md)
+- [x] Create OrchestratedGame class wrapping GameState (spec: game-orchestration.md)
 - [ ] Implement game lifecycle methods: startGame(), getCurrentPhase(), getCurrentPlayer(), getActionsRemaining()
 - [ ] Implement performAction() with ActionOutcome discriminated union type
 - [ ] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)

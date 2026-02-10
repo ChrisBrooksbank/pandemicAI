@@ -74,3 +74,9 @@ export {
   hasEventCard,
   type EventResult,
 } from "./events";
+export {
+  startGame,
+  OrchestratedGame,
+  GameOverError,
+  type OrchestratedGameStatus,
+} from "./orchestrator";
