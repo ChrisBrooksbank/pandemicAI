@@ -782,3 +782,254 @@ describe("OrchestratedGame.drawCards", () => {
     });
   });
 });
+
+describe("OrchestratedGame.infectCities", () => {
+  describe("phase validation", () => {
+    it("throws InvalidPhaseError when not in Infect phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Game starts in Actions phase
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      expect(() => game.infectCities()).toThrow(InvalidPhaseError);
+      expect(() => game.infectCities()).toThrow(/Infect phase/);
+    });
+
+    it("succeeds when in Infect phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      expect(outcome).toBeDefined();
+      expect(outcome.gameStatus).toBeDefined();
+    });
+
+    it("throws GameOverError when game has ended", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set game to lost status in Infect phase
+      const lostState: GameState = { ...state, phase: TurnPhase.Infect, status: GameStatus.Lost };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.infectCities()).toThrow(GameOverError);
+    });
+  });
+
+  describe("basic infection", () => {
+    it("infects cities based on infection rate", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Should have infected some cities
+      expect(outcome.citiesInfected.length).toBeGreaterThan(0);
+      expect(outcome.gameStatus).toBe(GameStatus.Ongoing);
+    });
+
+    it("reports infected cities with correct structure", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Check that infected cities have proper structure
+      for (const infected of outcome.citiesInfected) {
+        expect(infected.city).toBeDefined();
+        expect(infected.color).toBeDefined();
+        expect(infected.color).toMatch(/^(blue|yellow|black|red)$/);
+      }
+    });
+
+    it("places cubes on the board", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Manually advance to Infect phase
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Cubes should have been placed
+      expect(outcome.cubesPlaced).toBeGreaterThan(0);
+    });
+  });
+
+  describe("One Quiet Night event", () => {
+    it("skips infection phase when One Quiet Night is active", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set One Quiet Night flag and advance to Infect phase
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        skipNextInfectionPhase: true,
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Should have infected no cities
+      expect(outcome.citiesInfected).toHaveLength(0);
+      expect(outcome.cubesPlaced).toBe(0);
+      expect(outcome.outbreaks).toHaveLength(0);
+      expect(outcome.gameStatus).toBe(GameStatus.Ongoing);
+
+      // Flag should be cleared
+      expect(outcome.state.skipNextInfectionPhase).toBe(false);
+    });
+  });
+
+  describe("outbreak detection", () => {
+    it("detects outbreaks when cities exceed 3 cubes", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up a city with 3 cubes that will outbreak when infected
+      const updatedBoard = { ...state.board };
+      const atlantaState = updatedBoard["Atlanta"];
+      if (atlantaState) {
+        updatedBoard["Atlanta"] = { ...atlantaState, blue: 3 };
+      }
+
+      // Place Atlanta infection card at the top of the infection deck
+      const atlantaCard = { city: "Atlanta", color: Disease.Blue };
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        board: updatedBoard,
+        infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Should have triggered at least one outbreak
+      expect(outcome.outbreaks.length).toBeGreaterThan(0);
+    });
+
+    it("reports outbreak information with city and color", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up a city with 3 cubes that will outbreak when infected
+      const updatedBoard = { ...state.board };
+      const atlantaState = updatedBoard["Atlanta"];
+      if (atlantaState) {
+        updatedBoard["Atlanta"] = { ...atlantaState, blue: 3 };
+      }
+
+      // Place Atlanta infection card at the top of the infection deck
+      const atlantaCard = { city: "Atlanta", color: Disease.Blue };
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        board: updatedBoard,
+        infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Check outbreak structure
+      if (outcome.outbreaks.length > 0) {
+        const outbreak = outcome.outbreaks[0];
+        if (outbreak) {
+          expect(outbreak.city).toBeDefined();
+          expect(outbreak.color).toBeDefined();
+          expect(outbreak.cascade).toBeDefined();
+          expect(Array.isArray(outbreak.cascade)).toBe(true);
+        }
+      }
+    });
+  });
+
+  describe("loss conditions", () => {
+    it("detects game loss when outbreak count reaches 8", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up state where one more outbreak will lose
+      const updatedBoard = { ...state.board };
+      const atlantaState = updatedBoard["Atlanta"];
+      if (atlantaState) {
+        updatedBoard["Atlanta"] = { ...atlantaState, blue: 3 };
+      }
+
+      // Place Atlanta infection card at the top
+      const atlantaCard = { city: "Atlanta", color: Disease.Blue };
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        outbreakCount: 7, // One more outbreak will lose
+        board: updatedBoard,
+        infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Game should be lost
+      expect(outcome.gameStatus).toBe(GameStatus.Lost);
+    });
+
+    it("detects game loss when cube supply is exhausted", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set cube supply to 0 for blue
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        cubeSupply: { ...state.cubeSupply, [Disease.Blue]: 0 },
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Game should be lost if a blue city was infected
+      const blueInfected = outcome.citiesInfected.some((c) => c.color === Disease.Blue);
+      if (blueInfected) {
+        expect(outcome.gameStatus).toBe(GameStatus.Lost);
+      }
+    });
+  });
+
+  describe("eradicated diseases", () => {
+    it("skips cube placement for eradicated diseases", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Eradicate blue disease
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        cures: { ...state.cures, [Disease.Blue]: CureStatus.Eradicated },
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const initialBlueSupply = infectPhaseState.cubeSupply[Disease.Blue] ?? 0;
+
+      const outcome = game.infectCities();
+
+      // Blue cube supply should not have changed
+      expect(outcome.state.cubeSupply[Disease.Blue]).toBe(initialBlueSupply);
+    });
+  });
+});

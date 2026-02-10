@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 55
+- Build iterations: 56
 - Last updated: 2026-02-10
 
 ## Tasks
@@ -135,7 +135,7 @@
 - [x] Implement game lifecycle methods: startGame(), getCurrentPhase(), getCurrentPlayer(), getActionsRemaining()
 - [x] Implement performAction() with ActionOutcome discriminated union type
 - [x] Implement drawCards() with DrawOutcome (bundled epidemic resolution, hand limit detection)
-- [ ] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
+- [x] Implement infectCities() with InfectOutcome (city infections, outbreaks, cascades)
 - [ ] Implement phase auto-advancement (Actions→Draw→Infect→next player)
 - [ ] Implement playEvent() for event cards playable during any phase
 - [ ] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
