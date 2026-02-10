@@ -124,7 +124,7 @@
 ### Phase 15: Integration & Polish
 
 - [x] Update getAvailableActions() to return all valid actions based on current game state
-- [ ] Add comprehensive integration tests (full game scenarios)
+- [x] Add comprehensive integration tests (full game scenarios)
 - [ ] Export public API from index.ts (createGame, action functions, query functions)
 - [ ] Add JSDoc comments to all public API functions
 - [ ] Run full npm run check and fix any remaining issues
