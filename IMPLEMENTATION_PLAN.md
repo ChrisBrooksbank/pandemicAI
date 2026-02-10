@@ -118,8 +118,8 @@
 - [x] Implement Government Grant event (build research station anywhere)
 - [x] Implement One Quiet Night event (skip next infection phase)
 - [x] Implement Resilient Population event (remove card from infection discard)
-- [ ] Implement Forecast event (examine top 6 infection cards, rearrange)
-- [ ] Add unit tests for all event cards
+- [x] Implement Forecast event (examine top 6 infection cards, rearrange)
+- [x] Add unit tests for all event cards
 
 ### Phase 15: Integration & Polish
 

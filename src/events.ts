@@ -366,3 +366,70 @@ export function resilientPopulation(
     },
   };
 }
+
+/**
+ * Play the Forecast event card.
+ * Examine the top 6 cards of the Infection deck and rearrange them in any order.
+ *
+ * @param state - The current game state
+ * @param newOrder - Array of city names representing the new order (top to bottom)
+ * @param eventPlayerIndex - Index of the player playing the event (defaults to current player)
+ * @returns EventResult with updated state or error message
+ */
+export function forecast(
+  state: GameState,
+  newOrder: string[],
+  eventPlayerIndex?: number,
+): EventResult {
+  // First, play the event card (handles validation and card removal)
+  const playResult = playEventCard(state, EventType.Forecast, eventPlayerIndex);
+  if (!playResult.success) {
+    return playResult;
+  }
+
+  // Take the top 6 cards from the infection deck (or fewer if deck has less than 6)
+  const numCardsToExamine = Math.min(6, playResult.state.infectionDeck.length);
+  const topCards = playResult.state.infectionDeck.slice(0, numCardsToExamine);
+  const remainingDeck = playResult.state.infectionDeck.slice(numCardsToExamine);
+
+  // Validate that newOrder has the correct number of cards
+  if (newOrder.length !== numCardsToExamine) {
+    return {
+      success: false,
+      error: `Invalid card order: expected ${numCardsToExamine} cards, got ${newOrder.length}`,
+    };
+  }
+
+  // Validate that newOrder contains exactly the same cards as topCards (just reordered)
+  const topCardCities = topCards.map((card) => card.city).sort();
+  const newOrderSorted = [...newOrder].sort();
+
+  if (JSON.stringify(topCardCities) !== JSON.stringify(newOrderSorted)) {
+    return {
+      success: false,
+      error:
+        "Invalid card order: must contain exactly the same cards as the top of the infection deck",
+    };
+  }
+
+  // Create the reordered cards by mapping city names back to infection cards
+  const reorderedCards = newOrder.map((cityName) => {
+    const card = topCards.find((c) => c.city === cityName);
+    // This should never be undefined due to validation above, but TypeScript needs the check
+    if (!card) {
+      throw new Error(`Card not found for city: ${cityName}`);
+    }
+    return card;
+  });
+
+  // Put the reordered cards back on top of the remaining deck
+  const updatedInfectionDeck = [...reorderedCards, ...remainingDeck];
+
+  return {
+    success: true,
+    state: {
+      ...playResult.state,
+      infectionDeck: updatedInfectionDeck,
+    },
+  };
+}

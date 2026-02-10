@@ -66,6 +66,7 @@ export {
 } from "./infection";
 export {
   airlift,
+  forecast,
   governmentGrant,
   oneQuietNight,
   resilientPopulation,
