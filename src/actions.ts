@@ -4,6 +4,7 @@ import { getCurrentPlayer } from "./game";
 import {
   CureStatus,
   Disease,
+  EventType,
   GameStatus,
   Role,
   TurnPhase,
@@ -1373,6 +1374,92 @@ export function operationsExpertMove(
 
   // Apply Medic's passive ability (auto-remove cured disease cubes)
   newState = applyMedicPassive(newState, state.currentPlayerIndex, destinationCity);
+
+  return {
+    success: true,
+    state: newState,
+  };
+}
+
+/**
+ * Contingency Planner Special Action: Take an event card from the player discard pile and store it.
+ * The stored card does not count toward hand limit.
+ * Only 1 event card may be stored at a time.
+ * When the stored event is played, it is removed from the game (not discarded).
+ *
+ * @param state - The current game state
+ * @param eventType - The type of event card to take from discard
+ * @returns ActionResult with updated state or error message
+ */
+export function contingencyPlannerTakeEvent(state: GameState, eventType: EventType): ActionResult {
+  // Validate common action preconditions
+  const preconditionError = validateActionPreconditions(state);
+  if (preconditionError) {
+    return { success: false, error: preconditionError };
+  }
+
+  // Get current player
+  const currentPlayer = getCurrentPlayer(state);
+
+  // Check if current player is Contingency Planner
+  if (currentPlayer.role !== Role.ContingencyPlanner) {
+    return {
+      success: false,
+      error: "Cannot use Contingency Planner ability: current player is not Contingency Planner",
+    };
+  }
+
+  // Check if player already has a stored event card
+  if (currentPlayer.storedEventCard) {
+    return {
+      success: false,
+      error: "Cannot store event card: Contingency Planner already has a stored event card",
+    };
+  }
+
+  // Find the event card in the player discard pile
+  const eventCardIndex = state.playerDiscard.findIndex(
+    (card) => card.type === "event" && card.event === eventType,
+  );
+
+  if (eventCardIndex === -1) {
+    return {
+      success: false,
+      error: `Cannot take event card: ${eventType} not found in player discard pile`,
+    };
+  }
+
+  const eventCard = state.playerDiscard[eventCardIndex];
+  if (eventCard?.type !== "event") {
+    return {
+      success: false,
+      error: "Invalid card type: expected event card",
+    };
+  }
+
+  // Remove the event card from discard pile
+  const updatedDiscard = state.playerDiscard.filter((_, index) => index !== eventCardIndex);
+
+  // Store the event card on the player
+  const updatedPlayers = state.players.map((player, index) => {
+    if (index === state.currentPlayerIndex) {
+      return {
+        ...player,
+        storedEventCard: eventCard,
+      };
+    }
+    return player;
+  });
+
+  // Decrement actions remaining
+  const actionsRemaining = state.actionsRemaining - 1;
+
+  const newState = {
+    ...state,
+    players: updatedPlayers,
+    actionsRemaining,
+    playerDiscard: updatedDiscard,
+  };
 
   return {
     success: true,

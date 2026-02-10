@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildResearchStation,
   charterFlight,
+  contingencyPlannerTakeEvent,
   directFlight,
   discoverCure,
   driveFerry,
@@ -15,10 +16,12 @@ import { createGame } from "./game";
 import {
   CureStatus,
   Disease,
+  EventType,
   GameStatus,
   Role,
   TurnPhase,
   type CityCard,
+  type EventCard,
   type GameState,
 } from "./types";
 
@@ -3509,6 +3512,158 @@ describe("Operations Expert Role Abilities", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.state.players[0]?.location).toBe("Tokyo");
+      }
+    });
+  });
+});
+
+describe("Contingency Planner Role Abilities", () => {
+  function createTestGameWithRole(role: Role, location: string = "Atlanta"): GameState {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    // Set player role and location
+    const updatedPlayers = state.players.map((player, index) => {
+      if (index === 0) {
+        return { ...player, role, location };
+      }
+      return player;
+    });
+    return { ...state, players: updatedPlayers };
+  }
+
+  describe("contingencyPlannerTakeEvent", () => {
+    it("should allow Contingency Planner to take event card from discard", () => {
+      let state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      // Add an event card to player discard pile
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      state = { ...state, playerDiscard: [airliftCard] };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Airlift);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.state.players[0]?.storedEventCard).toEqual(airliftCard);
+        expect(result.state.playerDiscard).toHaveLength(0);
+        expect(result.state.actionsRemaining).toBe(3);
+      }
+    });
+
+    it("should not allow storing event when one is already stored", () => {
+      let state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      // Set a stored event card
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      const updatedPlayers = state.players.map((player, index) => {
+        if (index === 0) {
+          return { ...player, storedEventCard: airliftCard };
+        }
+        return player;
+      });
+      state = { ...state, players: updatedPlayers };
+
+      // Add another event to discard
+      const forecastCard: EventCard = { type: "event", event: EventType.Forecast };
+      state = { ...state, playerDiscard: [forecastCard] };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Forecast);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("already has a stored event card");
+    });
+
+    it("should fail if event card not in discard pile", () => {
+      const state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Airlift);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("not found in player discard pile");
+    });
+
+    it("should fail if player is not Contingency Planner", () => {
+      let state = createTestGameWithRole(Role.Medic, "Atlanta");
+
+      // Add an event card to discard
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      state = { ...state, playerDiscard: [airliftCard] };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Airlift);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("not Contingency Planner");
+    });
+
+    it("should remove specific event from discard when multiple events present", () => {
+      let state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      // Add multiple event cards to discard
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      const forecastCard: EventCard = { type: "event", event: EventType.Forecast };
+      const governmentGrantCard: EventCard = {
+        type: "event",
+        event: EventType.GovernmentGrant,
+      };
+      state = { ...state, playerDiscard: [airliftCard, forecastCard, governmentGrantCard] };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Forecast);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.state.players[0]?.storedEventCard).toEqual(forecastCard);
+        expect(result.state.playerDiscard).toHaveLength(2);
+        expect(result.state.playerDiscard).toContainEqual(airliftCard);
+        expect(result.state.playerDiscard).toContainEqual(governmentGrantCard);
+        expect(result.state.playerDiscard).not.toContainEqual(forecastCard);
+      }
+    });
+
+    it("should cost 1 action to store event card", () => {
+      let state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      // Add an event card to discard
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      state = { ...state, playerDiscard: [airliftCard], actionsRemaining: 4 };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Airlift);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.state.actionsRemaining).toBe(3);
+      }
+    });
+
+    it("should not count stored event toward hand limit", () => {
+      let state = createTestGameWithRole(Role.ContingencyPlanner, "Atlanta");
+
+      // Add an event card to discard
+      const airliftCard: EventCard = { type: "event", event: EventType.Airlift };
+      state = { ...state, playerDiscard: [airliftCard] };
+
+      // Give player 7 cards (hand limit)
+      const cards: CityCard[] = [
+        { type: "city", city: "London", color: Disease.Blue },
+        { type: "city", city: "Paris", color: Disease.Blue },
+        { type: "city", city: "Madrid", color: Disease.Blue },
+        { type: "city", city: "Milan", color: Disease.Blue },
+        { type: "city", city: "Essen", color: Disease.Blue },
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+      ];
+      const updatedPlayers = state.players.map((player, index) => {
+        if (index === 0) {
+          return { ...player, hand: cards };
+        }
+        return player;
+      });
+      state = { ...state, players: updatedPlayers };
+
+      const result = contingencyPlannerTakeEvent(state, EventType.Airlift);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Player has 7 cards in hand + 1 stored event (not counted)
+        expect(result.state.players[0]?.hand.length).toBe(7);
+        expect(result.state.players[0]?.storedEventCard).toEqual(airliftCard);
       }
     });
   });

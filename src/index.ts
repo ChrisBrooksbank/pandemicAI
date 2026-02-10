@@ -46,6 +46,7 @@ export {
 export {
   buildResearchStation,
   charterFlight,
+  contingencyPlannerTakeEvent,
   directFlight,
   discoverCure,
   dispatcherMoveOtherPlayer,

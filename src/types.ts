@@ -109,6 +109,8 @@ export interface Player {
   location: string;
   /** The player's hand of cards */
   hand: PlayerCard[];
+  /** Contingency Planner only: stored event card (doesn't count toward hand limit) */
+  storedEventCard?: EventCard;
 }
 
 /**
