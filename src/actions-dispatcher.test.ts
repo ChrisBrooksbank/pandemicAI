@@ -160,12 +160,12 @@ describe("Dispatcher role abilities", () => {
     it("should move another player using their city card for direct flight", () => {
       let state = createDispatcherGame();
 
-      // Give Player 1 (Medic) a Miami city card
+      // Give Player 1 (Medic) a Miami city card (replace hand to prevent flaky tests)
       const updatedPlayers = state.players.map((player, index) => {
         if (index === 1) {
           return {
             ...player,
-            hand: [...player.hand, { type: "city" as const, city: "Miami", color: Disease.Yellow }],
+            hand: [{ type: "city" as const, city: "Miami", color: Disease.Yellow }],
           };
         }
         return player;
@@ -180,24 +180,20 @@ describe("Dispatcher role abilities", () => {
       if (result.success) {
         expect(result.state.players[1]?.location).toBe("Miami");
         expect(result.state.actionsRemaining).toBe(3);
-        // Card should be discarded
-        expect(
-          result.state.players[1]?.hand.some(
-            (card) => card.type === "city" && card.city === "Miami",
-          ),
-        ).toBe(false);
+        // Card should be discarded, hand should be empty
+        expect(result.state.players[1]?.hand).toHaveLength(0);
       }
     });
 
     it("should move another player using Dispatcher's city card for direct flight", () => {
       let state = createDispatcherGame();
 
-      // Give Dispatcher (Player 0) a Miami city card
+      // Give Dispatcher (Player 0) a Miami city card (replace hand to prevent flaky tests)
       const updatedPlayers = state.players.map((player, index) => {
         if (index === 0) {
           return {
             ...player,
-            hand: [...player.hand, { type: "city" as const, city: "Miami", color: Disease.Yellow }],
+            hand: [{ type: "city" as const, city: "Miami", color: Disease.Yellow }],
           };
         }
         return player;
@@ -211,17 +207,22 @@ describe("Dispatcher role abilities", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.state.players[1]?.location).toBe("Miami");
-        // Dispatcher's card should be discarded
-        expect(
-          result.state.players[0]?.hand.some(
-            (card) => card.type === "city" && card.city === "Miami",
-          ),
-        ).toBe(false);
+        // Dispatcher's card should be discarded, hand should be empty
+        expect(result.state.players[0]?.hand).toHaveLength(0);
       }
     });
 
     it("should fail if required card is not in hand", () => {
-      const state = createDispatcherGame();
+      let state = createDispatcherGame();
+
+      // Clear Player 1's hand to ensure they don't have Miami card (prevent flaky test)
+      const updatedPlayers = state.players.map((player, index) => {
+        if (index === 1) {
+          return { ...player, hand: [] };
+        }
+        return player;
+      });
+      state = { ...state, players: updatedPlayers };
 
       // Try to move Player 1 to Miami without having Miami card
       const result = dispatcherMoveOtherPlayer(state, 1, "direct", "Miami", true);

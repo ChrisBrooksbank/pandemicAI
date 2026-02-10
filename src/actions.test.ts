@@ -2133,9 +2133,11 @@ describe("discoverCure", () => {
     const updatedPlayers = state.players.map((player, index) => {
       if (index === 0) {
         // Set role to Dispatcher (no special abilities for curing)
-        return { ...player, location: "Atlanta", hand: cards, role: "dispatcher" };
+        return { ...player, location: "Atlanta", hand: cards, role: Role.Dispatcher };
       }
-      return player;
+      // Set player 1 to Quarantine Specialist (no abilities that affect curing/board state)
+      // This prevents flaky tests if they're randomly assigned Medic
+      return { ...player, role: Role.QuarantineSpecialist };
     });
     return { ...state, players: updatedPlayers };
   }
@@ -2285,6 +2287,13 @@ describe("discoverCure", () => {
     ];
 
     const state = createTestGameWithCards(yellowCards);
+    // Ensure there's at least one yellow cube on the board (prevents flaky test)
+    const lagosState = state.board["Lagos"];
+    if (lagosState) {
+      state.board["Lagos"] = { ...lagosState, yellow: 1 };
+      state.cubeSupply.yellow = (state.cubeSupply.yellow || 24) - 1;
+    }
+
     const result = discoverCure(state, Disease.Yellow);
 
     expect(result.success).toBe(true);
@@ -2666,7 +2675,12 @@ describe("Integration: Win/Loss Scenarios", () => {
             { type: "city", city: "Milan", color: Disease.Blue },
           ],
         },
-        player1,
+        {
+          ...player1,
+          // Move player1 away from Atlanta and ensure not Medic to prevent flaky tests
+          location: "London",
+          role: Role.QuarantineSpecialist,
+        },
       ],
       cures: {
         [Disease.Yellow]: CureStatus.Cured,
@@ -2773,7 +2787,13 @@ describe("Integration: Win/Loss Scenarios", () => {
             { type: "city", city: "Milan", color: Disease.Blue },
           ],
         },
-        player1,
+        {
+          ...player1,
+          // Move player1 away from Atlanta to prevent Medic passive ability from triggering
+          location: "London",
+          // Also ensure they're not Medic (to prevent flaky tests)
+          role: Role.QuarantineSpecialist,
+        },
       ],
       cures: {
         [Disease.Yellow]: CureStatus.Cured,
@@ -3380,7 +3400,15 @@ describe("Operations Expert Role Abilities", () => {
     });
 
     it("should fail if player does not have the city card", () => {
-      const state = createTestGameWithRole(Role.OperationsExpert, "Atlanta");
+      let state = createTestGameWithRole(Role.OperationsExpert, "Atlanta");
+      // Clear player's hand to ensure they don't have Paris card (prevent flaky test)
+      const updatedPlayers = state.players.map((player, index) => {
+        if (index === 0) {
+          return { ...player, hand: [] };
+        }
+        return player;
+      });
+      state = { ...state, players: updatedPlayers };
 
       const result = operationsExpertMove(state, "London", "Paris");
 
