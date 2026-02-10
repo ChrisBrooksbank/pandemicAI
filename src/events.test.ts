@@ -1,6 +1,6 @@
 // Tests for event card functionality
 import { describe, it, expect } from "vitest";
-import { playEventCard, hasEventCard, airlift } from "./events";
+import { playEventCard, hasEventCard, airlift, governmentGrant } from "./events";
 import {
   Disease,
   EventType,
@@ -50,6 +50,41 @@ describe("Event Card Playability", () => {
         hasResearchStation: false,
       },
       Paris: {
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+        hasResearchStation: false,
+      },
+      Essen: {
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+        hasResearchStation: false,
+      },
+      Washington: {
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+        hasResearchStation: false,
+      },
+      London: {
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+        hasResearchStation: false,
+      },
+      Madrid: {
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+        hasResearchStation: false,
+      },
+      Milan: {
         blue: 0,
         yellow: 0,
         black: 0,
@@ -465,6 +500,432 @@ describe("Event Card Playability", () => {
       if (result.success) {
         // Actions remaining should be unchanged
         expect(result.state.actionsRemaining).toBe(4);
+      }
+    });
+  });
+
+  describe("governmentGrant", () => {
+    it("should build a research station in any city without card discard", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      // Give player 0 Government Grant event
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [
+              { type: "city", city: "Chicago", color: Disease.Blue },
+              { type: "event", event: EventType.GovernmentGrant },
+            ],
+          },
+          player1,
+        ],
+      };
+
+      const result = governmentGrant(stateWithEvent, "Paris");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Paris should now have a research station
+        expect(result.state.board["Paris"]?.hasResearchStation).toBe(true);
+        // Event card should be removed from hand
+        expect(result.state.players[0]?.hand).toHaveLength(1);
+        // Event card should be in discard pile
+        expect(result.state.playerDiscard).toHaveLength(1);
+        // City card should still be in hand (not discarded)
+        expect(result.state.players[0]?.hand[0]).toEqual({
+          type: "city",
+          city: "Chicago",
+          color: Disease.Blue,
+        });
+      }
+    });
+
+    it("should build a station without player being at that location", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            location: "Atlanta", // Player is in Atlanta
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Build station in Paris (remote city)
+      const result = governmentGrant(stateWithEvent, "Paris");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.state.board["Paris"]?.hasResearchStation).toBe(true);
+        expect(result.state.players[0]?.location).toBe("Atlanta"); // Player stays in Atlanta
+      }
+    });
+
+    it("should fail if target city already has a research station", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Try to build in Atlanta (already has a station)
+      const result = governmentGrant(stateWithEvent, "Atlanta");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("research station already exists");
+      }
+    });
+
+    it("should fail with invalid target city", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      const result = governmentGrant(stateWithEvent, "InvalidCity");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid target city");
+      }
+    });
+
+    it("should handle 6 station limit by moving one", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      // Create state with 6 research stations
+      const atlantaState = state.board["Atlanta"];
+      const chicagoState = state.board["Chicago"];
+      const parisState = state.board["Paris"];
+      if (!atlantaState || !chicagoState || !parisState) {
+        throw new Error("Test setup failed: missing cities");
+      }
+      const stateWith6Stations: GameState = {
+        ...state,
+        board: {
+          ...state.board,
+          Atlanta: { ...atlantaState, hasResearchStation: true },
+          Chicago: { ...chicagoState, hasResearchStation: true },
+          Paris: { ...parisState, hasResearchStation: true },
+          London: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Madrid: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Milan: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+        },
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Build in Essen, removing station from Milan
+      const result = governmentGrant(
+        stateWith6Stations,
+        "Essen",
+        "Milan", // Remove station from Milan
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Essen should have a station
+        expect(result.state.board["Essen"]?.hasResearchStation).toBe(true);
+        // Milan should no longer have a station
+        expect(result.state.board["Milan"]?.hasResearchStation).toBe(false);
+        // Other stations should remain
+        expect(result.state.board["Atlanta"]?.hasResearchStation).toBe(true);
+        expect(result.state.board["Chicago"]?.hasResearchStation).toBe(true);
+        expect(result.state.board["Paris"]?.hasResearchStation).toBe(true);
+        expect(result.state.board["London"]?.hasResearchStation).toBe(true);
+        expect(result.state.board["Madrid"]?.hasResearchStation).toBe(true);
+      }
+    });
+
+    it("should fail when 6 stations exist but no city specified for removal", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const atlantaState = state.board["Atlanta"];
+      const chicagoState = state.board["Chicago"];
+      const parisState = state.board["Paris"];
+      if (!atlantaState || !chicagoState || !parisState) {
+        throw new Error("Test setup failed: missing cities");
+      }
+      const stateWith6Stations: GameState = {
+        ...state,
+        board: {
+          ...state.board,
+          Atlanta: { ...atlantaState, hasResearchStation: true },
+          Chicago: { ...chicagoState, hasResearchStation: true },
+          Paris: { ...parisState, hasResearchStation: true },
+          London: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Madrid: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Milan: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+        },
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      const result = governmentGrant(stateWith6Stations, "Essen");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("all 6 stations are in use");
+      }
+    });
+
+    it("should fail if trying to remove station when less than 6 exist", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Try to build in Paris while removing Atlanta (only 1 station exists)
+      const result = governmentGrant(stateWithEvent, "Paris", "Atlanta");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("only remove stations when all 6 are in use");
+      }
+    });
+
+    it("should fail if city to remove doesn't have a station", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const atlantaState = state.board["Atlanta"];
+      const chicagoState = state.board["Chicago"];
+      const parisState = state.board["Paris"];
+      if (!atlantaState || !chicagoState || !parisState) {
+        throw new Error("Test setup failed: missing cities");
+      }
+      const stateWith6Stations: GameState = {
+        ...state,
+        board: {
+          ...state.board,
+          Atlanta: { ...atlantaState, hasResearchStation: true },
+          Chicago: { ...chicagoState, hasResearchStation: true },
+          Paris: { ...parisState, hasResearchStation: true },
+          London: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Madrid: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+          Milan: { blue: 0, yellow: 0, black: 0, red: 0, hasResearchStation: true },
+        },
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Try to remove station from Essen (which doesn't have one)
+      const result = governmentGrant(stateWith6Stations, "Washington", "Essen");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("no research station exists there");
+      }
+    });
+
+    it("should work with stored event from Contingency Planner", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const eventCard: EventCard = { type: "event", event: EventType.GovernmentGrant };
+      const stateWithStored: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            role: Role.ContingencyPlanner,
+            hand: [],
+            storedEventCard: eventCard,
+          },
+          player1,
+        ],
+      };
+
+      const result = governmentGrant(stateWithStored, "Chicago");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Chicago should have a research station
+        expect(result.state.board["Chicago"]?.hasResearchStation).toBe(true);
+        // Stored event should be cleared
+        expect(result.state.players[0]?.storedEventCard).toBeUndefined();
+        // Stored event should NOT go to discard (removed from game)
+        expect(result.state.playerDiscard).toHaveLength(0);
+      }
+    });
+
+    it("should not cost an action", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      const result = governmentGrant(stateWithEvent, "Chicago");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Actions remaining should be unchanged
+        expect(result.state.actionsRemaining).toBe(4);
+      }
+    });
+
+    it("should work during any turn phase", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "event", event: EventType.GovernmentGrant }],
+          },
+          player1,
+        ],
+      };
+
+      // Test during draw phase
+      const drawPhaseState = { ...stateWithEvent, phase: TurnPhase.Draw };
+      const drawResult = governmentGrant(drawPhaseState, "Chicago");
+      expect(drawResult.success).toBe(true);
+
+      // Test during infect phase
+      const infectPhaseState = { ...stateWithEvent, phase: TurnPhase.Infect };
+      const infectResult = governmentGrant(infectPhaseState, "Chicago");
+      expect(infectResult.success).toBe(true);
+    });
+
+    it("should allow a different player to play the event", () => {
+      const state = createTestGameState();
+      const player0 = state.players[0];
+      const player1 = state.players[1];
+      if (!player0 || !player1) {
+        throw new Error("Test setup failed: missing players");
+      }
+      const stateWithEvent: GameState = {
+        ...state,
+        players: [
+          {
+            ...player0,
+            hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
+          },
+          {
+            ...player1,
+            hand: [
+              { type: "city", city: "Paris", color: Disease.Blue },
+              { type: "event", event: EventType.GovernmentGrant },
+            ],
+          },
+        ],
+      };
+
+      // Player 1 plays Government Grant
+      const result = governmentGrant(stateWithEvent, "Chicago", undefined, 1);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Chicago should have a station
+        expect(result.state.board["Chicago"]?.hasResearchStation).toBe(true);
+        // Player 1's hand should have the event removed
+        expect(result.state.players[1]?.hand).toHaveLength(1);
+      }
+    });
+
+    it("should fail if player doesn't have the event card", () => {
+      const state = createTestGameState();
+      const result = governmentGrant(state, "Chicago");
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("does not have");
       }
     });
   });

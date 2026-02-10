@@ -115,7 +115,7 @@
 
 - [x] Implement event card playability (playable anytime, no action cost)
 - [x] Implement Airlift event (move any pawn to any city)
-- [ ] Implement Government Grant event (build research station anywhere)
+- [x] Implement Government Grant event (build research station anywhere)
 - [ ] Implement One Quiet Night event (skip next infection phase)
 - [ ] Implement Resilient Population event (remove card from infection discard)
 - [ ] Implement Forecast event (examine top 6 infection cards, rearrange)

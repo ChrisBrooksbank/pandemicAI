@@ -187,3 +187,113 @@ export function airlift(
     },
   };
 }
+
+/**
+ * Play the Government Grant event card.
+ * Build a research station in any city (no card discard needed, no pawn needs to be there).
+ * If all 6 stations are already placed, may move one.
+ *
+ * @param state - The current game state
+ * @param targetCity - Name of the city to build the research station in
+ * @param cityToRemoveStation - Optional: city to remove station from (required if 6 stations already built)
+ * @param eventPlayerIndex - Index of the player playing the event (defaults to current player)
+ * @returns EventResult with updated state or error message
+ */
+export function governmentGrant(
+  state: GameState,
+  targetCity: string,
+  cityToRemoveStation?: string,
+  eventPlayerIndex?: number,
+): EventResult {
+  // First, play the event card (handles validation and card removal)
+  const playResult = playEventCard(state, EventType.GovernmentGrant, eventPlayerIndex);
+  if (!playResult.success) {
+    return playResult;
+  }
+
+  // Validate target city exists on the board
+  const targetCityState = playResult.state.board[targetCity];
+  if (targetCityState === undefined) {
+    return {
+      success: false,
+      error: `Invalid target city: ${targetCity}`,
+    };
+  }
+
+  // Check if target city already has a research station
+  if (targetCityState.hasResearchStation) {
+    return {
+      success: false,
+      error: `Cannot build research station in ${targetCity}: research station already exists here`,
+    };
+  }
+
+  // Count existing research stations
+  const existingStations = Object.values(playResult.state.board).filter(
+    (cityState) => cityState.hasResearchStation,
+  ).length;
+
+  // If 6 stations already exist, must remove one
+  if (existingStations >= 6) {
+    if (!cityToRemoveStation) {
+      return {
+        success: false,
+        error:
+          "Cannot build research station: all 6 stations are in use. Must specify a city to remove one from.",
+      };
+    }
+
+    // Validate the city to remove station from exists and has a station
+    const cityToRemoveState = playResult.state.board[cityToRemoveStation];
+    if (!cityToRemoveState) {
+      return {
+        success: false,
+        error: `Invalid city to remove station from: ${cityToRemoveStation}`,
+      };
+    }
+
+    if (!cityToRemoveState.hasResearchStation) {
+      return {
+        success: false,
+        error: `Cannot remove research station from ${cityToRemoveStation}: no research station exists there`,
+      };
+    }
+  } else if (cityToRemoveStation) {
+    // If less than 6 stations exist, should not specify a city to remove
+    return {
+      success: false,
+      error: "Cannot remove research station: only remove stations when all 6 are in use",
+    };
+  }
+
+  // Create updated board
+  const updatedBoard: Record<string, typeof targetCityState> = {};
+  for (const cityName in playResult.state.board) {
+    const cityState = playResult.state.board[cityName];
+    if (cityState !== undefined) {
+      if (cityName === targetCity) {
+        // Add research station to target city
+        updatedBoard[cityName] = {
+          ...cityState,
+          hasResearchStation: true,
+        };
+      } else if (cityName === cityToRemoveStation) {
+        // Remove research station from specified city
+        updatedBoard[cityName] = {
+          ...cityState,
+          hasResearchStation: false,
+        };
+      } else {
+        updatedBoard[cityName] = cityState;
+      }
+    }
+  }
+
+  return {
+    success: true,
+    state: {
+      ...playResult.state,
+      board: updatedBoard,
+    },
+  };
+}

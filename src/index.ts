@@ -64,4 +64,4 @@ export {
   type InfectionPhaseResult,
   type EpidemicResult,
 } from "./infection";
-export { airlift, playEventCard, hasEventCard, type EventResult } from "./events";
+export { airlift, governmentGrant, playEventCard, hasEventCard, type EventResult } from "./events";
