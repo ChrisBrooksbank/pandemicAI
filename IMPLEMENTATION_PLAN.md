@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 56
+- Build iterations: 57
 - Last updated: 2026-02-10
 
 ## Tasks
@@ -146,7 +146,7 @@
 ### Phase 17: AI Bot Players (Spec: ai-bot-players.md)
 
 - [x] Define Bot interface (chooseAction, chooseDiscards, chooseForecastOrder)
-- [ ] Implement RandomBot (selects random actions for baseline/fuzz-testing)
+- [x] Implement RandomBot (selects random actions for baseline/fuzz-testing)
 - [ ] Implement PriorityBot with rule-based strategy (treat 3-cube cities, discover cures, move to threats)
 - [ ] Implement HeuristicBot with scored actions (disease threat, cure progress, station coverage, etc.)
 - [ ] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
