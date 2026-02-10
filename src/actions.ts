@@ -969,6 +969,304 @@ export function discoverCure(state: GameState, color: DiseaseColor): ActionResul
 }
 
 /**
+ * Dispatcher Move Pawn to Other Pawn: Move any pawn to a city containing another pawn.
+ * Does not require discarding a card.
+ * The Dispatcher must be the current player to use this ability.
+ *
+ * @param state - The current game state
+ * @param playerToMoveIndex - Index of the player to move (0-based)
+ * @param targetPlayerIndex - Index of the player whose city to move to (0-based)
+ * @returns ActionResult with updated state or error message
+ */
+export function dispatcherMoveToOtherPawn(
+  state: GameState,
+  playerToMoveIndex: number,
+  targetPlayerIndex: number,
+): ActionResult {
+  // Validate common action preconditions
+  const preconditionError = validateActionPreconditions(state);
+  if (preconditionError) {
+    return { success: false, error: preconditionError };
+  }
+
+  // Get current player (must be Dispatcher)
+  const currentPlayer = getCurrentPlayer(state);
+
+  // Check if current player is Dispatcher
+  if (currentPlayer.role !== Role.Dispatcher) {
+    return {
+      success: false,
+      error: "Cannot use Dispatcher ability: current player is not Dispatcher",
+    };
+  }
+
+  // Validate player to move index
+  if (playerToMoveIndex < 0 || playerToMoveIndex >= state.players.length) {
+    return {
+      success: false,
+      error: `Invalid player to move index: ${playerToMoveIndex}`,
+    };
+  }
+
+  // Validate target player index
+  if (targetPlayerIndex < 0 || targetPlayerIndex >= state.players.length) {
+    return {
+      success: false,
+      error: `Invalid target player index: ${targetPlayerIndex}`,
+    };
+  }
+
+  // Cannot move to the same player
+  if (playerToMoveIndex === targetPlayerIndex) {
+    return {
+      success: false,
+      error: "Cannot move player to their own location",
+    };
+  }
+
+  const playerToMove = state.players[playerToMoveIndex];
+  const targetPlayer = state.players[targetPlayerIndex];
+
+  if (!playerToMove || !targetPlayer) {
+    return {
+      success: false,
+      error: "Invalid player indices",
+    };
+  }
+
+  const destinationCity = targetPlayer.location;
+
+  // Create updated state with player moved to target player's location
+  const updatedPlayers = state.players.map((player, index) => {
+    if (index === playerToMoveIndex) {
+      return {
+        ...player,
+        location: destinationCity,
+      };
+    }
+    return player;
+  });
+
+  // Decrement actions remaining
+  const actionsRemaining = state.actionsRemaining - 1;
+
+  let newState = {
+    ...state,
+    players: updatedPlayers,
+    actionsRemaining,
+  };
+
+  // Apply Medic's passive ability if the moved player is the Medic
+  if (playerToMove.role === Role.Medic) {
+    newState = applyMedicPassive(newState, playerToMoveIndex, destinationCity);
+  }
+
+  return {
+    success: true,
+    state: newState,
+  };
+}
+
+/**
+ * Dispatcher Move Other Player: Move another player's pawn as if it were the Dispatcher's own.
+ * Can use Drive/Ferry, Direct Flight, Charter Flight, or Shuttle Flight.
+ * When using Direct Flight or Charter Flight, can use cards from either the Dispatcher's hand or the other player's hand.
+ *
+ * @param state - The current game state
+ * @param playerToMoveIndex - Index of the player to move (0-based)
+ * @param moveType - Type of movement ("drive", "direct", "charter", "shuttle")
+ * @param destinationCity - The name of the city to move to
+ * @param useOtherPlayerCard - For direct/charter flights: true to use other player's card, false to use Dispatcher's card
+ * @returns ActionResult with updated state or error message
+ */
+export function dispatcherMoveOtherPlayer(
+  state: GameState,
+  playerToMoveIndex: number,
+  moveType: "drive" | "direct" | "charter" | "shuttle",
+  destinationCity: string,
+  useOtherPlayerCard: boolean = false,
+): ActionResult {
+  // Validate common action preconditions
+  const preconditionError = validateActionPreconditions(state);
+  if (preconditionError) {
+    return { success: false, error: preconditionError };
+  }
+
+  // Get current player (must be Dispatcher)
+  const currentPlayer = getCurrentPlayer(state);
+
+  // Check if current player is Dispatcher
+  if (currentPlayer.role !== Role.Dispatcher) {
+    return {
+      success: false,
+      error: "Cannot use Dispatcher ability: current player is not Dispatcher",
+    };
+  }
+
+  // Validate player to move index
+  if (playerToMoveIndex < 0 || playerToMoveIndex >= state.players.length) {
+    return {
+      success: false,
+      error: `Invalid player to move index: ${playerToMoveIndex}`,
+    };
+  }
+
+  const playerToMove = state.players[playerToMoveIndex];
+  if (!playerToMove) {
+    return {
+      success: false,
+      error: `Invalid player to move index: ${playerToMoveIndex}`,
+    };
+  }
+
+  const currentLocation = playerToMove.location;
+
+  // Validate destination city exists
+  const destination = getCity(destinationCity);
+  if (!destination) {
+    return {
+      success: false,
+      error: `Invalid destination: ${destinationCity} is not a valid city`,
+    };
+  }
+
+  // Variables for card handling
+  let cardHolderIndex: number | null = null;
+  let cardIndex = -1;
+  let cityCardNeeded: string | null = null;
+
+  // Handle different move types
+  if (moveType === "drive") {
+    // Drive/Ferry: Check if cities are connected
+    const currentCity = getCity(currentLocation);
+    if (!currentCity) {
+      return {
+        success: false,
+        error: `Invalid current location: ${currentLocation}`,
+      };
+    }
+
+    if (!currentCity.connections.includes(destinationCity)) {
+      return {
+        success: false,
+        error: `Cannot drive/ferry from ${currentLocation} to ${destinationCity}: cities are not connected`,
+      };
+    }
+  } else if (moveType === "direct") {
+    // Direct Flight: Need the destination city card
+    cityCardNeeded = destinationCity;
+    cardHolderIndex = useOtherPlayerCard ? playerToMoveIndex : state.currentPlayerIndex;
+  } else if (moveType === "charter") {
+    // Charter Flight: Need the current location city card
+    cityCardNeeded = currentLocation;
+    cardHolderIndex = useOtherPlayerCard ? playerToMoveIndex : state.currentPlayerIndex;
+  } else if (moveType === "shuttle") {
+    // Shuttle Flight: Both cities must have research stations
+    const currentCityState = state.board[currentLocation];
+    const destinationCityState = state.board[destinationCity];
+
+    if (!currentCityState || !destinationCityState) {
+      return {
+        success: false,
+        error: `Invalid city state`,
+      };
+    }
+
+    if (!currentCityState.hasResearchStation) {
+      return {
+        success: false,
+        error: `Cannot shuttle flight from ${currentLocation}: no research station at current location`,
+      };
+    }
+
+    if (!destinationCityState.hasResearchStation) {
+      return {
+        success: false,
+        error: `Cannot shuttle flight to ${destinationCity}: no research station at destination`,
+      };
+    }
+  }
+
+  // Check for required card if needed
+  if (cityCardNeeded && cardHolderIndex !== null) {
+    const cardHolder = state.players[cardHolderIndex];
+    if (!cardHolder) {
+      return {
+        success: false,
+        error: `Invalid card holder index: ${cardHolderIndex}`,
+      };
+    }
+
+    cardIndex = cardHolder.hand.findIndex(
+      (card) => card.type === "city" && card.city === cityCardNeeded,
+    );
+
+    if (cardIndex === -1) {
+      const cardSource = useOtherPlayerCard ? "other player" : "Dispatcher";
+      return {
+        success: false,
+        error: `Cannot perform ${moveType} flight: ${cardSource} does not have the ${cityCardNeeded} city card`,
+      };
+    }
+  }
+
+  // Create updated players array
+  let updatedPlayers = [...state.players];
+  let playerDiscard = [...state.playerDiscard];
+
+  // Move the player
+  updatedPlayers = updatedPlayers.map((player, index) => {
+    if (index === playerToMoveIndex) {
+      return {
+        ...player,
+        location: destinationCity,
+      };
+    }
+    return player;
+  });
+
+  // Discard card if needed
+  if (cityCardNeeded && cardHolderIndex !== null && cardIndex !== -1) {
+    const cardHolder = updatedPlayers[cardHolderIndex];
+    if (cardHolder) {
+      const discardedCard = cardHolder.hand[cardIndex];
+      if (discardedCard) {
+        updatedPlayers = updatedPlayers.map((player, index) => {
+          if (index === cardHolderIndex) {
+            return {
+              ...player,
+              hand: player.hand.filter((_, i) => i !== cardIndex),
+            };
+          }
+          return player;
+        });
+        playerDiscard = [...playerDiscard, discardedCard];
+      }
+    }
+  }
+
+  // Decrement actions remaining
+  const actionsRemaining = state.actionsRemaining - 1;
+
+  let newState = {
+    ...state,
+    players: updatedPlayers,
+    actionsRemaining,
+    playerDiscard,
+  };
+
+  // Apply Medic's passive ability if the moved player is the Medic
+  if (playerToMove.role === Role.Medic) {
+    newState = applyMedicPassive(newState, playerToMoveIndex, destinationCity);
+  }
+
+  return {
+    success: true,
+    state: newState,
+  };
+}
+
+/**
  * Operations Expert Special Move: From a research station, discard any city card to move to any city.
  * This special move can only be used once per turn.
  * Must be at a research station. Can discard any city card (not just matching city).

@@ -48,6 +48,8 @@ export {
   charterFlight,
   directFlight,
   discoverCure,
+  dispatcherMoveOtherPlayer,
+  dispatcherMoveToOtherPawn,
   driveFerry,
   operationsExpertMove,
   shareKnowledge,

@@ -107,7 +107,7 @@
 
 - [x] Implement Operations Expert role (build without card; move from station with any city card)
 - [x] Implement Quarantine Specialist role (prevent cube placement on current + adjacent cities)
-- [ ] Implement Dispatcher role (move any pawn to another pawn; move other player's pawn)
+- [x] Implement Dispatcher role (move any pawn to another pawn; move other player's pawn)
 - [ ] Implement Contingency Planner role (store event card on role card, play later)
 - [ ] Add unit tests for all remaining roles
 
