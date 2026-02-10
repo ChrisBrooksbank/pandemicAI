@@ -140,7 +140,7 @@
 - [x] Implement playEvent() for event cards playable during any phase
 - [x] Add GameEvent log with event types (action-performed, epidemic, outbreak, cure, eradication, etc.)
 - [x] Add error types (InvalidPhaseError, InvalidActionError, GameOverError)
-- [ ] Add unit tests for orchestrator phase transitions and outcome types
+- [x] Add unit tests for orchestrator phase transitions and outcome types
 - [ ] Add integration tests for complete game flows through orchestrator
 
 ### Phase 17: AI Bot Players (Spec: ai-bot-players.md)

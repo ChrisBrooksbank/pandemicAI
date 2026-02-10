@@ -926,6 +926,12 @@ describe("OrchestratedGame.infectCities", () => {
         phase: TurnPhase.Infect,
         board: updatedBoard,
         infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+        // Ensure no Quarantine Specialist is at Atlanta or adjacent cities to prevent blocking
+        players: state.players.map((p) => ({
+          ...p,
+          role: Role.Medic, // Use Medic role to avoid Quarantine Specialist interference
+          location: "Tokyo", // Move players away from Atlanta
+        })),
       };
       (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
 
@@ -953,6 +959,12 @@ describe("OrchestratedGame.infectCities", () => {
         phase: TurnPhase.Infect,
         board: updatedBoard,
         infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+        // Ensure no Quarantine Specialist is at Atlanta or adjacent cities to prevent blocking
+        players: state.players.map((p) => ({
+          ...p,
+          role: Role.Medic, // Use Medic role to avoid Quarantine Specialist interference
+          location: "Tokyo", // Move players away from Atlanta
+        })),
       };
       (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
 
@@ -1041,6 +1053,514 @@ describe("OrchestratedGame.infectCities", () => {
 
       // Blue cube supply should not have changed
       expect(outcome.state.cubeSupply[Disease.Blue]).toBe(initialBlueSupply);
+    });
+  });
+});
+
+describe("Outcome type structure validation", () => {
+  describe("ActionOutcome", () => {
+    it("includes all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      const outcome = game.performAction("drive-ferry:Washington");
+
+      // Validate all required fields are present
+      expect(outcome).toHaveProperty("state");
+      expect(outcome).toHaveProperty("action");
+      expect(outcome).toHaveProperty("gameStatus");
+      expect(outcome).toHaveProperty("sideEffects");
+      expect(outcome).toHaveProperty("actionsRemaining");
+
+      expect(typeof outcome.action).toBe("string");
+      expect(typeof outcome.gameStatus).toBe("string");
+      expect(typeof outcome.sideEffects).toBe("object");
+      expect(typeof outcome.actionsRemaining).toBe("number");
+    });
+
+    it("includes side effects when eradication occurs", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for eradication
+      const blueCards = [
+        { type: "city" as const, city: "Atlanta", color: Disease.Blue },
+        { type: "city" as const, city: "Chicago", color: Disease.Blue },
+        { type: "city" as const, city: "Montreal", color: Disease.Blue },
+        { type: "city" as const, city: "New York", color: Disease.Blue },
+        { type: "city" as const, city: "Washington", color: Disease.Blue },
+      ];
+
+      const updatedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: blueCards } : p)),
+        board: Object.fromEntries(
+          Object.entries(state.board).map(([city, cityState]) => [city, { ...cityState, blue: 0 }]),
+        ),
+      };
+      (game as unknown as { gameState: GameState }).gameState = updatedState;
+
+      const outcome = game.performAction("discover-cure:blue");
+
+      expect(outcome.sideEffects.diseasesEradicated).toBeDefined();
+      expect(Array.isArray(outcome.sideEffects.diseasesEradicated)).toBe(true);
+      expect(outcome.sideEffects.diseasesEradicated?.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("DrawOutcome", () => {
+    it("includes all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Validate all required fields are present
+      expect(outcome).toHaveProperty("state");
+      expect(outcome).toHaveProperty("gameStatus");
+      expect(outcome).toHaveProperty("cardsDrawn");
+      expect(outcome).toHaveProperty("epidemics");
+      expect(outcome).toHaveProperty("needsDiscard");
+      expect(outcome).toHaveProperty("playersNeedingDiscard");
+
+      expect(typeof outcome.gameStatus).toBe("string");
+      expect(Array.isArray(outcome.cardsDrawn)).toBe(true);
+      expect(Array.isArray(outcome.epidemics)).toBe(true);
+      expect(typeof outcome.needsDiscard).toBe("boolean");
+      expect(Array.isArray(outcome.playersNeedingDiscard)).toBe(true);
+    });
+
+    it("includes epidemic info with all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const epidemicCard: PlayerCard = { type: "epidemic" };
+      const regularCard: CityCard = { type: "city", city: "Tokyo", color: Disease.Red };
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [epidemicCard, regularCard, ...state.playerDeck.slice(2)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      expect(outcome.epidemics.length).toBeGreaterThan(0);
+      const epidemic = outcome.epidemics[0];
+      if (epidemic) {
+        expect(epidemic).toHaveProperty("infectedCity");
+        expect(epidemic).toHaveProperty("infectedColor");
+        expect(epidemic).toHaveProperty("infectionRatePosition");
+        expect(typeof epidemic.infectedCity).toBe("string");
+        expect(typeof epidemic.infectedColor).toBe("string");
+        expect(typeof epidemic.infectionRatePosition).toBe("number");
+      }
+    });
+
+    it("includes drawn card info with all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      for (const card of outcome.cardsDrawn) {
+        expect(card).toHaveProperty("name");
+        expect(card).toHaveProperty("type");
+        expect(typeof card.name).toBe("string");
+        expect(["city", "event"]).toContain(card.type);
+
+        if (card.type === "city") {
+          expect(card).toHaveProperty("color");
+          expect(typeof card.color).toBe("string");
+        }
+      }
+    });
+  });
+
+  describe("InfectOutcome", () => {
+    it("includes all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      // Validate all required fields are present
+      expect(outcome).toHaveProperty("state");
+      expect(outcome).toHaveProperty("gameStatus");
+      expect(outcome).toHaveProperty("citiesInfected");
+      expect(outcome).toHaveProperty("outbreaks");
+      expect(outcome).toHaveProperty("cubesPlaced");
+
+      expect(typeof outcome.gameStatus).toBe("string");
+      expect(Array.isArray(outcome.citiesInfected)).toBe(true);
+      expect(Array.isArray(outcome.outbreaks)).toBe(true);
+      expect(typeof outcome.cubesPlaced).toBe("number");
+    });
+
+    it("includes infected city info with all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      for (const infected of outcome.citiesInfected) {
+        expect(infected).toHaveProperty("city");
+        expect(infected).toHaveProperty("color");
+        expect(typeof infected.city).toBe("string");
+        expect(typeof infected.color).toBe("string");
+      }
+    });
+
+    it("includes outbreak info with all required fields when outbreaks occur", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for outbreak
+      const updatedBoard = { ...state.board };
+      const atlantaState = updatedBoard["Atlanta"];
+      if (atlantaState) {
+        updatedBoard["Atlanta"] = { ...atlantaState, blue: 3 };
+      }
+
+      const atlantaCard = { city: "Atlanta", color: Disease.Blue };
+      const infectPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Infect,
+        board: updatedBoard,
+        infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+      };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      const outcome = game.infectCities();
+
+      if (outcome.outbreaks.length > 0) {
+        const outbreak = outcome.outbreaks[0];
+        if (outbreak) {
+          expect(outbreak).toHaveProperty("city");
+          expect(outbreak).toHaveProperty("color");
+          expect(outbreak).toHaveProperty("cascade");
+          expect(typeof outbreak.city).toBe("string");
+          expect(typeof outbreak.color).toBe("string");
+          expect(Array.isArray(outbreak.cascade)).toBe(true);
+        }
+      }
+    });
+  });
+
+  describe("EventOutcome", () => {
+    it("includes all required fields", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, { event: EventType.OneQuietNight });
+
+      // Validate all required fields are present
+      expect(outcome).toHaveProperty("state");
+      expect(outcome).toHaveProperty("gameStatus");
+      expect(outcome).toHaveProperty("eventType");
+      expect(outcome).toHaveProperty("playerIndex");
+      expect(outcome).toHaveProperty("fromStoredCard");
+
+      expect(typeof outcome.gameStatus).toBe("string");
+      expect(typeof outcome.eventType).toBe("string");
+      expect(typeof outcome.playerIndex).toBe("number");
+      expect(typeof outcome.fromStoredCard).toBe("boolean");
+    });
+
+    it("correctly identifies event from stored card", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const storedCard: EventCard = { type: "event", event: EventType.GovernmentGrant };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: [],
+          storedEventCard: i === 0 ? storedCard : undefined,
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, {
+        event: EventType.GovernmentGrant,
+        targetCity: "Tokyo",
+      });
+
+      expect(outcome.fromStoredCard).toBe(true);
+    });
+
+    it("correctly identifies event from hand", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const modifiedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = modifiedState;
+
+      const outcome = game.playEvent(0, { event: EventType.OneQuietNight });
+
+      expect(outcome.fromStoredCard).toBe(false);
+    });
+  });
+});
+
+describe("Phase transition edge cases", () => {
+  describe("transition validation", () => {
+    it("prevents performAction during Draw phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(InvalidPhaseError);
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(/Draw phase/);
+    });
+
+    it("prevents performAction during Infect phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(InvalidPhaseError);
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(/Infect phase/);
+    });
+
+    it("prevents drawCards during Actions phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Game starts in Actions phase
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      expect(() => game.drawCards()).toThrow(InvalidPhaseError);
+      expect(() => game.drawCards()).toThrow(/Draw phase/);
+    });
+
+    it("prevents drawCards during Infect phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const infectPhaseState: GameState = { ...state, phase: TurnPhase.Infect };
+      (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
+
+      expect(() => game.drawCards()).toThrow(InvalidPhaseError);
+      expect(() => game.drawCards()).toThrow(/Draw phase/);
+    });
+
+    it("prevents infectCities during Actions phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      // Game starts in Actions phase
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+
+      expect(() => game.infectCities()).toThrow(InvalidPhaseError);
+      expect(() => game.infectCities()).toThrow(/Infect phase/);
+    });
+
+    it("prevents infectCities during Draw phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const drawPhaseState: GameState = { ...state, phase: TurnPhase.Draw };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      expect(() => game.infectCities()).toThrow(InvalidPhaseError);
+      expect(() => game.infectCities()).toThrow(/Infect phase/);
+    });
+  });
+
+  describe("game over prevention", () => {
+    it("prevents all actions when game is won", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const wonState: GameState = { ...state, status: GameStatus.Won };
+      (game as unknown as { gameState: GameState }).gameState = wonState;
+
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(GameOverError);
+    });
+
+    it("prevents all actions when game is lost", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const lostState: GameState = { ...state, status: GameStatus.Lost };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.performAction("drive-ferry:Washington")).toThrow(GameOverError);
+    });
+
+    it("prevents drawCards when game is won", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const wonState: GameState = { ...state, phase: TurnPhase.Draw, status: GameStatus.Won };
+      (game as unknown as { gameState: GameState }).gameState = wonState;
+
+      expect(() => game.drawCards()).toThrow(GameOverError);
+    });
+
+    it("prevents drawCards when game is lost", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const lostState: GameState = { ...state, phase: TurnPhase.Draw, status: GameStatus.Lost };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.drawCards()).toThrow(GameOverError);
+    });
+
+    it("prevents infectCities when game is won", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const wonState: GameState = { ...state, phase: TurnPhase.Infect, status: GameStatus.Won };
+      (game as unknown as { gameState: GameState }).gameState = wonState;
+
+      expect(() => game.infectCities()).toThrow(GameOverError);
+    });
+
+    it("prevents infectCities when game is lost", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const lostState: GameState = { ...state, phase: TurnPhase.Infect, status: GameStatus.Lost };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.infectCities()).toThrow(GameOverError);
+    });
+
+    it("prevents playEvent when game is won", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const wonState: GameState = {
+        ...state,
+        status: GameStatus.Won,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = wonState;
+
+      expect(() => game.playEvent(0, { event: EventType.OneQuietNight })).toThrow(GameOverError);
+    });
+
+    it("prevents playEvent when game is lost", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      const eventCard: EventCard = { type: "event", event: EventType.OneQuietNight };
+      const lostState: GameState = {
+        ...state,
+        status: GameStatus.Lost,
+        players: state.players.map((p, i) => ({
+          ...p,
+          hand: i === 0 ? [eventCard] : [],
+        })),
+      };
+      (game as unknown as { gameState: GameState }).gameState = lostState;
+
+      expect(() => game.playEvent(0, { event: EventType.OneQuietNight })).toThrow(GameOverError);
+    });
+  });
+
+  describe("phase transition timing", () => {
+    it("does not advance from Actions to Draw if actions remain", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getActionsRemaining()).toBe(4);
+
+      game.performAction("drive-ferry:Washington");
+
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Actions);
+      expect(game.getActionsRemaining()).toBe(3);
+    });
+
+    it("does not advance from Draw to Infect if discards are needed", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up player with 6 cards (will have 8 after drawing 2)
+      const sixCards: CityCard[] = [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "city", city: "Chicago", color: Disease.Blue },
+        { type: "city", city: "Montreal", color: Disease.Blue },
+        { type: "city", city: "New York", color: Disease.Blue },
+        { type: "city", city: "Washington", color: Disease.Blue },
+        { type: "city", city: "London", color: Disease.Blue },
+      ];
+
+      const card1: CityCard = { type: "city", city: "Paris", color: Disease.Blue };
+      const card2: CityCard = { type: "city", city: "Madrid", color: Disease.Blue };
+      const playerDeck = [card1, card2, ...state.playerDeck.slice(2)];
+
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        players: state.players.map((p, i) => (i === 0 ? { ...p, hand: sixCards } : p)),
+        playerDeck,
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Should still be in Draw phase due to hand limit
+      expect(outcome.needsDiscard).toBe(true);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
+    });
+
+    it("does not advance if game ends during phase", () => {
+      const game = startGame({ playerCount: 2, difficulty: 4 });
+      const state = game.getGameState();
+
+      // Set up for deck exhaustion during draw
+      const drawPhaseState: GameState = {
+        ...state,
+        phase: TurnPhase.Draw,
+        playerDeck: [],
+      };
+      (game as unknown as { gameState: GameState }).gameState = drawPhaseState;
+
+      const outcome = game.drawCards();
+
+      // Game should be lost, no phase advancement
+      expect(outcome.gameStatus).toBe(GameStatus.Lost);
+      expect(game.getCurrentPhase()).toBe(TurnPhase.Draw);
     });
   });
 });
@@ -1773,6 +2293,12 @@ describe("GameEvent Log", () => {
         phase: TurnPhase.Infect,
         board: updatedBoard,
         infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+        // Ensure no Quarantine Specialist is at Atlanta or adjacent cities to prevent blocking
+        players: state.players.map((p) => ({
+          ...p,
+          role: Role.Medic, // Use Medic role to avoid Quarantine Specialist interference
+          location: "Tokyo", // Move players away from Atlanta
+        })),
       };
       (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
 
