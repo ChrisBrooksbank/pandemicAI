@@ -113,7 +113,7 @@
 
 ### Phase 14: Event Cards (Spec: roles-and-events.md)
 
-- [ ] Implement event card playability (playable anytime, no action cost)
+- [x] Implement event card playability (playable anytime, no action cost)
 - [ ] Implement Airlift event (move any pawn to any city)
 - [ ] Implement Government Grant event (build research station anywhere)
 - [ ] Implement One Quiet Night event (skip next infection phase)
