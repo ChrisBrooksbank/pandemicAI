@@ -290,3 +290,135 @@ export class LocalStorageBackend implements StorageBackend {
     }
   }
 }
+
+/**
+ * Filesystem-based storage backend for Node.js environments
+ * Uses Node.js fs module to persist game saves to disk
+ */
+export class FileSystemBackend implements StorageBackend {
+  private readonly directory: string;
+  private readonly extension: string;
+
+  /**
+   * Creates a new FileSystemBackend
+   * @param directory - Directory path where save files will be stored (default: "./saves")
+   * @param extension - File extension for save files (default: ".json")
+   */
+  constructor(directory = "./saves", extension = ".json") {
+    this.directory = directory;
+    this.extension = extension;
+  }
+
+  /**
+   * Ensures the save directory exists
+   * @private
+   */
+  private async ensureDirectory(): Promise<void> {
+    const fs = await import("fs/promises");
+    try {
+      await fs.mkdir(this.directory, { recursive: true });
+    } catch (error) {
+      throw new Error(
+        `Failed to create save directory: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Gets the full file path for a given save key
+   * @private
+   */
+  private getFilePath(key: string): string {
+    return `${this.directory}/${key}${this.extension}`;
+  }
+
+  /**
+   * Saves data to a file
+   * @param key - Unique identifier for the saved data (used as filename)
+   * @param data - The data to save (JSON string)
+   */
+  async save(key: string, data: string): Promise<void> {
+    await this.ensureDirectory();
+
+    const fs = await import("fs/promises");
+    const filePath = this.getFilePath(key);
+
+    try {
+      await fs.writeFile(filePath, data, "utf-8");
+    } catch (error) {
+      throw new Error(
+        `Failed to save to file ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Loads data from a file
+   * @param key - Unique identifier for the data to load (used as filename)
+   * @returns The saved data, or null if not found
+   */
+  async load(key: string): Promise<string | null> {
+    const fs = await import("fs/promises");
+    const filePath = this.getFilePath(key);
+
+    try {
+      const data = await fs.readFile(filePath, "utf-8");
+      return data;
+    } catch (error) {
+      // Return null if file doesn't exist
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        return null;
+      }
+
+      throw new Error(
+        `Failed to load from file ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Lists all saved game files in the directory
+   * @returns Array of save keys (filenames without extension)
+   */
+  async list(): Promise<string[]> {
+    const fs = await import("fs/promises");
+
+    try {
+      // Ensure directory exists first
+      await this.ensureDirectory();
+
+      const files = await fs.readdir(this.directory);
+
+      // Filter files by extension and remove extension from keys
+      return files
+        .filter((file: string) => file.endsWith(this.extension))
+        .map((file: string) => file.slice(0, -this.extension.length));
+    } catch (error) {
+      throw new Error(
+        `Failed to list files in ${this.directory}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Deletes a saved game file
+   * @param key - Unique identifier for the data to delete (used as filename)
+   */
+  async delete(key: string): Promise<void> {
+    const fs = await import("fs/promises");
+    const filePath = this.getFilePath(key);
+
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      // Silently succeed if file doesn't exist
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        return;
+      }
+
+      throw new Error(
+        `Failed to delete file ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+}

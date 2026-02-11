@@ -1,6 +1,7 @@
 // Tests for StorageBackend interface and implementations
-import { beforeEach, describe, expect, it } from "vitest";
-import { LocalStorageBackend, type StorageBackend } from "./serialization";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { FileSystemBackend, LocalStorageBackend, type StorageBackend } from "./serialization";
+import { mkdir, readdir, rm } from "fs/promises";
 
 // Mock localStorage for Node.js environment
 class MockStorage implements Storage {
@@ -192,5 +193,137 @@ describe("LocalStorageBackend", () => {
   it("should handle deleting non-existent keys gracefully", async () => {
     // Should not throw
     await expect(backend.delete("non-existent")).resolves.toBeUndefined();
+  });
+});
+
+describe("FileSystemBackend", () => {
+  const testDir = "./test-saves";
+  let backend: FileSystemBackend;
+
+  beforeEach(async () => {
+    backend = new FileSystemBackend(testDir, ".json");
+  });
+
+  afterEach(async () => {
+    // Clean up test directory after each test
+    try {
+      await rm(testDir, { recursive: true, force: true });
+    } catch {
+      // Ignore errors if directory doesn't exist
+    }
+  });
+
+  it("should save and load data", async () => {
+    await backend.save("game1", "test-data-1");
+    const loaded = await backend.load("game1");
+    expect(loaded).toBe("test-data-1");
+  });
+
+  it("should return null for non-existent files", async () => {
+    const loaded = await backend.load("non-existent");
+    expect(loaded).toBeNull();
+  });
+
+  it("should create the save directory if it doesn't exist", async () => {
+    // Save should create the directory
+    await backend.save("game1", "data1");
+
+    // Verify directory was created
+    const files = await readdir(testDir);
+    expect(files).toContain("game1.json");
+  });
+
+  it("should list all saved games", async () => {
+    await backend.save("game1", "data1");
+    await backend.save("game2", "data2");
+    await backend.save("game3", "data3");
+
+    const keys = await backend.list();
+    expect(keys).toHaveLength(3);
+    expect(keys).toContain("game1");
+    expect(keys).toContain("game2");
+    expect(keys).toContain("game3");
+  });
+
+  it("should only list files with the correct extension", async () => {
+    await backend.save("game1", "data1");
+
+    // Manually create a file with a different extension
+    await mkdir(testDir, { recursive: true });
+    const fs = await import("fs/promises");
+    await fs.writeFile(`${testDir}/other-file.txt`, "other-data");
+
+    const keys = await backend.list();
+    expect(keys).toHaveLength(1);
+    expect(keys).toEqual(["game1"]);
+  });
+
+  it("should delete saved games", async () => {
+    await backend.save("game1", "data1");
+    await backend.save("game2", "data2");
+
+    await backend.delete("game1");
+
+    expect(await backend.load("game1")).toBeNull();
+    expect(await backend.load("game2")).toBe("data2");
+    expect(await backend.list()).toEqual(["game2"]);
+  });
+
+  it("should overwrite existing data on save", async () => {
+    await backend.save("game1", "original-data");
+    await backend.save("game1", "updated-data");
+
+    const loaded = await backend.load("game1");
+    expect(loaded).toBe("updated-data");
+  });
+
+  it("should use custom directory and extension", async () => {
+    const customDir = "./custom-saves";
+    const customBackend = new FileSystemBackend(customDir, ".save");
+
+    try {
+      await customBackend.save("game1", "data1");
+
+      // Verify the file exists in the custom directory with custom extension
+      const fs = await import("fs/promises");
+      const data = await fs.readFile(`${customDir}/game1.save`, "utf-8");
+      expect(data).toBe("data1");
+
+      // Clean up
+      await rm(customDir, { recursive: true, force: true });
+    } catch (error) {
+      // Clean up even if test fails
+      await rm(customDir, { recursive: true, force: true });
+      throw error;
+    }
+  });
+
+  it("should handle empty list when directory is empty", async () => {
+    const keys = await backend.list();
+    expect(keys).toEqual([]);
+  });
+
+  it("should handle deleting non-existent files gracefully", async () => {
+    // Should not throw
+    await expect(backend.delete("non-existent")).resolves.toBeUndefined();
+  });
+
+  it("should work with nested directory paths", async () => {
+    const nestedDir = "./test-saves/nested/deep";
+    const nestedBackend = new FileSystemBackend(nestedDir);
+
+    try {
+      await nestedBackend.save("game1", "data1");
+
+      const loaded = await nestedBackend.load("game1");
+      expect(loaded).toBe("data1");
+
+      // Clean up
+      await rm("./test-saves", { recursive: true, force: true });
+    } catch (error) {
+      // Clean up even if test fails
+      await rm("./test-saves", { recursive: true, force: true });
+      throw error;
+    }
   });
 });
