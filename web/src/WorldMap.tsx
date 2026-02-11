@@ -1,9 +1,10 @@
 import { CITIES } from '@engine/board'
-import type { Disease } from '@engine/types'
+import type { Disease, GameState, Role } from '@engine/types'
 import './WorldMap.css'
 
 interface WorldMapProps {
   className?: string
+  gameState?: GameState
 }
 
 /**
@@ -89,6 +90,19 @@ const DISEASE_COLORS: Record<Disease, string> = {
 }
 
 /**
+ * Role color to CSS color mapping
+ */
+const ROLE_COLORS: Record<string, string> = {
+  'contingency_planner': '#00CED1', // Cyan
+  'dispatcher': '#FF69B4', // Pink
+  'medic': '#FF8C00', // Orange
+  'operations_expert': '#90EE90', // Light Green
+  'quarantine_specialist': '#228B22', // Dark Green
+  'researcher': '#8B4513', // Brown
+  'scientist': '#FFFFFF', // White
+}
+
+/**
  * Generate all unique city connections as line segments
  * Deduplicates bidirectional connections
  */
@@ -119,8 +133,42 @@ function generateConnections() {
   return connections
 }
 
-export function WorldMap({ className }: WorldMapProps) {
+export function WorldMap({ className, gameState }: WorldMapProps) {
   const connections = generateConnections()
+
+  /**
+   * Get cube counts for a city from game state
+   */
+  const getCubes = (cityName: string) => {
+    if (!gameState) return { blue: 0, yellow: 0, black: 0, red: 0 }
+    const cityState = gameState.board[cityName]
+    if (!cityState) return { blue: 0, yellow: 0, black: 0, red: 0 }
+    return {
+      blue: cityState.blue,
+      yellow: cityState.yellow,
+      black: cityState.black,
+      red: cityState.red,
+    }
+  }
+
+  /**
+   * Check if a city has a research station
+   */
+  const hasResearchStation = (cityName: string) => {
+    if (!gameState) return false
+    const cityState = gameState.board[cityName]
+    return cityState?.hasResearchStation ?? false
+  }
+
+  /**
+   * Get all players at a specific city
+   */
+  const getPlayersAtCity = (cityName: string) => {
+    if (!gameState) return []
+    return gameState.players
+      .map((player, index) => ({ player, index }))
+      .filter(({ player }) => player.location === cityName)
+  }
 
   return (
     <svg
@@ -229,6 +277,9 @@ export function WorldMap({ className }: WorldMapProps) {
           }
 
           const color = DISEASE_COLORS[city.color]
+          const cubes = getCubes(city.name)
+          const hasStation = hasResearchStation(city.name)
+          const playersHere = getPlayersAtCity(city.name)
 
           return (
             <g key={city.name} className="WorldMap_city">
@@ -254,6 +305,79 @@ export function WorldMap({ className }: WorldMapProps) {
               >
                 {city.name}
               </text>
+
+              {/* Disease cubes (small squares positioned near the city) */}
+              {(['blue', 'yellow', 'black', 'red'] as const).map((diseaseKey, colorIndex) => {
+                const cubeCount = cubes[diseaseKey]
+                const diseaseColor = colorIndex as Disease
+
+                if (cubeCount === 0) return null
+
+                // Position cubes in a grid to the right of the city
+                const cubesArray = Array.from({ length: Math.min(cubeCount, 3) })
+                return cubesArray.map((_, cubeIndex) => {
+                  // Arrange cubes in a small grid: offset by color type and cube count
+                  const offsetX = 12 + colorIndex * 6
+                  const offsetY = -8 + cubeIndex * 6
+
+                  return (
+                    <rect
+                      key={`${diseaseKey}-${cubeIndex}`}
+                      x={pos.x + offsetX}
+                      y={pos.y + offsetY}
+                      width="5"
+                      height="5"
+                      fill={DISEASE_COLORS[diseaseColor]}
+                      stroke="#000"
+                      strokeWidth="0.5"
+                    />
+                  )
+                })
+              })}
+
+              {/* Research station (white cross icon) */}
+              {hasStation && (
+                <g>
+                  {/* Cross made of two rectangles */}
+                  <rect
+                    x={pos.x - 1.5}
+                    y={pos.y + 10}
+                    width="3"
+                    height="8"
+                    fill="#fff"
+                    stroke="#000"
+                    strokeWidth="0.5"
+                  />
+                  <rect
+                    x={pos.x - 4}
+                    y={pos.y + 12.5}
+                    width="8"
+                    height="3"
+                    fill="#fff"
+                    stroke="#000"
+                    strokeWidth="0.5"
+                  />
+                </g>
+              )}
+
+              {/* Player pawns (role-colored circles with offset) */}
+              {playersHere.map(({ player, index }, localIndex) => {
+                // Offset pawns horizontally when multiple players are co-located
+                const pawnOffsetX = localIndex * 10 - (playersHere.length - 1) * 5
+                const pawnOffsetY = 20
+
+                return (
+                  <circle
+                    key={index}
+                    cx={pos.x + pawnOffsetX}
+                    cy={pos.y + pawnOffsetY}
+                    r="5"
+                    fill={ROLE_COLORS[player.role]}
+                    stroke="#000"
+                    strokeWidth="1"
+                  />
+                )
+              })}
             </g>
           )
         })}

@@ -181,7 +181,7 @@
 - [x] Set up useReducer hook wrapping engine functions (AppState with gameState, dialog, etc.)
 - [x] Create SetupScreen component (player count, difficulty selectors, start button)
 - [x] Create SVG WorldMap component (1200x700 viewBox, 48 cities with connections)
-- [ ] Add disease cubes, research stations, and player pawns to SVG map
+- [x] Add disease cubes, research stations, and player pawns to SVG map
 - [ ] Add city click handlers for movement and action targeting
 - [ ] Create StatusBar component (outbreak track, infection rate, cure indicators, cube supplies)
 - [ ] Create PlayerPanel component (role, phase indicator, hand display, other player tabs)

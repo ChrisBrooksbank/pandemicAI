@@ -26,7 +26,7 @@ function App() {
     <div>
       <h1>Pandemic Game</h1>
 
-      <WorldMap />
+      <WorldMap gameState={gameState} />
 
       <div>
         <h2>Current Turn</h2>

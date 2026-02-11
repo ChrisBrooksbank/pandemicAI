@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import { WorldMap } from './WorldMap'
+import { OrchestratedGame } from '@engine/orchestrator'
 
 describe('WorldMap', () => {
   it('renders SVG with correct viewBox', () => {
@@ -57,5 +58,71 @@ describe('WorldMap', () => {
     const { container } = render(<WorldMap className="custom-class" />)
     const svg = container.querySelector('svg')
     expect(svg?.classList.contains('custom-class')).toBe(true)
+  })
+
+  it('renders disease cubes when gameState is provided', () => {
+    const game = OrchestratedGame.create({ playerCount: 2, difficulty: 4 })
+    const gameState = game.getGameState()
+
+    const { container } = render(<WorldMap gameState={gameState} />)
+
+    // After initial infection, there should be disease cubes
+    const cubeRects = container.querySelectorAll('rect[width="5"][height="5"]')
+    expect(cubeRects.length).toBeGreaterThan(0)
+  })
+
+  it('renders research stations when gameState is provided', () => {
+    const game = OrchestratedGame.create({ playerCount: 2, difficulty: 4 })
+    const gameState = game.getGameState()
+
+    const { container } = render(<WorldMap gameState={gameState} />)
+
+    // Atlanta should have a research station (initial setup)
+    // Research stations are rendered as white rectangles (cross)
+    const stationRects = container.querySelectorAll('rect[fill="#fff"]')
+    expect(stationRects.length).toBeGreaterThan(0)
+  })
+
+  it('renders player pawns when gameState is provided', () => {
+    const game = OrchestratedGame.create({ playerCount: 2, difficulty: 4 })
+    const gameState = game.getGameState()
+
+    const { container } = render(<WorldMap gameState={gameState} />)
+
+    // Should render circles for city markers (48) + player pawns (2)
+    const circles = container.querySelectorAll('circle')
+    expect(circles.length).toBe(48 + 2) // 48 cities + 2 players
+  })
+
+  it('offsets co-located player pawns horizontally', () => {
+    const game = OrchestratedGame.create({ playerCount: 4, difficulty: 4 })
+    const gameState = game.getGameState()
+
+    const { container } = render(<WorldMap gameState={gameState} />)
+
+    // All players start in Atlanta, so should have 4 pawns at different positions
+    const circles = container.querySelectorAll('circle')
+    expect(circles.length).toBe(48 + 4) // 48 cities + 4 players
+
+    // Player pawns are rendered last and have r="5", while city circles have r="8"
+    const pawnCircles = Array.from(circles).filter((c) => c.getAttribute('r') === '5')
+    expect(pawnCircles.length).toBe(4)
+
+    // Player pawns should have different cx values (offset)
+    const cxValues = pawnCircles.map((c) => c.getAttribute('cx'))
+    const uniqueCxValues = new Set(cxValues)
+    expect(uniqueCxValues.size).toBe(4) // All 4 pawns should have different x positions
+  })
+
+  it('renders without gameState (no cubes, stations, or pawns)', () => {
+    const { container } = render(<WorldMap />)
+
+    // Should only have city circles (48 total)
+    const circles = container.querySelectorAll('circle')
+    expect(circles.length).toBe(48)
+
+    // Should not have disease cubes or research stations
+    const cubeRects = container.querySelectorAll('rect[width="5"][height="5"]')
+    expect(cubeRects.length).toBe(0)
   })
 })
