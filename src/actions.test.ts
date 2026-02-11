@@ -3295,9 +3295,9 @@ describe("Operations Expert Role Abilities", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.state.board.London?.hasResearchStation).toBe(true);
-        // Card is discarded if player has it
-        expect(result.state.players[0]?.hand.length).toBe(originalHandSize - 1);
-        expect(result.state.playerDiscard.length).toBe(state.playerDiscard.length + 1);
+        // Operations Expert does NOT discard card even if they have it (ability says "without discarding")
+        expect(result.state.players[0]?.hand.length).toBe(originalHandSize);
+        expect(result.state.playerDiscard.length).toBe(state.playerDiscard.length);
       }
     });
 

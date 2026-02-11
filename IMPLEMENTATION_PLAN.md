@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 65
+- Build iterations: 70
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -287,3 +287,11 @@
     - All 130 web UI tests now pass reliably!
     - Engine tests: Occasional flakiness remains in orchestrator.test.ts "Operations Expert builds without discarding card" (passes 4/5 runs)
     - This flakiness is pre-existing and unrelated to web UI fix (caused by random card dealing in createTestGameWithSetup helper)
+  - **Iteration 70: FIXED Operations Expert card discard bug + flaky tests**:
+    - Root cause: Operations Expert was discarding city cards when building even though their ability says "without discarding"
+    - Bug in buildResearchStation(): `shouldDiscardCard = cardIndex !== -1` always discarded if player had matching card
+    - Fixed by adding `&& !isOperationsExpert` condition - Ops Expert NEVER discards, even if they have the card
+    - Updated test expectation in actions.test.ts to match correct behavior (no discard)
+    - Fixed flaky orchestrator test "Operations Expert builds without discarding card" (was failing when Ops Expert randomly got Washington card)
+    - Fixed flaky PriorityBot test by clearing Atlanta cubes (bot was prioritizing treat over cure)
+    - All 1080 tests now pass reliably!

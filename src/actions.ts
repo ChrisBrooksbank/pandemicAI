@@ -506,7 +506,8 @@ export function buildResearchStation(state: GameState, cityToRemoveStation?: str
   }
 
   // Remove the card from player's hand and add to discard pile (if card was used)
-  const shouldDiscardCard = cardIndex !== -1;
+  // Operations Expert can build without discarding, even if they have the matching card
+  const shouldDiscardCard = cardIndex !== -1 && !isOperationsExpert;
   const updatedHand = shouldDiscardCard
     ? currentPlayer.hand.filter((_, index) => index !== cardIndex)
     : currentPlayer.hand;

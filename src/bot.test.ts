@@ -1098,6 +1098,15 @@ describe("PriorityBot", () => {
       const atlantaState = state.board["Atlanta"];
       if (!atlantaState) throw new Error("Atlanta not found");
 
+      // Clear all cubes from Atlanta to make test deterministic
+      state.board["Atlanta"] = {
+        ...atlantaState,
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+      };
+
       // Give player 5 blue cards
       const blueCards: CityCard[] = [
         { type: "city", city: "Atlanta", color: Disease.Blue },
