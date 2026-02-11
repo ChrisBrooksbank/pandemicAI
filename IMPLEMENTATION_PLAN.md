@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 64
+- Build iterations: 65
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -279,3 +279,11 @@
     - This happened when discovering a cure for a disease with no cubes on the board (immediate eradication)
     - Fixed by updating condition to log cure-discovered for both Cured and Eradicated transitions from Uncured
     - All 1080 tests now pass reliably!
+  - **Iteration 65: FIXED web UI infection rate display test bug**:
+    - Tests "displays infection rate from infection rate array" and "displays all infection rates correctly" were failing in StatusBar.test.tsx
+    - Root cause: Tests used 0-indexed positions but engine's infectionRatePosition is 1-indexed (positions 1-7)
+    - Test was setting `infectionRatePosition: 3` expecting rate 3, but position 3 maps to array index 2 which has rate 2
+    - Fixed by changing `infectionRatePosition: 3` to `4` in first test, and `position` to `index + 1` in forEach loop
+    - All 130 web UI tests now pass reliably!
+    - Engine tests: Occasional flakiness remains in orchestrator.test.ts "Operations Expert builds without discarding card" (passes 4/5 runs)
+    - This flakiness is pre-existing and unrelated to web UI fix (caused by random card dealing in createTestGameWithSetup helper)

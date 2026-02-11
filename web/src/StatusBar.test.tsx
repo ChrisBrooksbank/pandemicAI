@@ -58,7 +58,7 @@ describe('StatusBar', () => {
 
   it('displays infection rate from infection rate array', () => {
     const gameState = createTestGameState({
-      infectionRatePosition: 3,
+      infectionRatePosition: 4,
       infectionRates: [2, 2, 2, 3, 3, 4, 4],
     })
     render(<StatusBar gameState={gameState} />)
@@ -165,9 +165,9 @@ describe('StatusBar', () => {
   it('displays all infection rates correctly', () => {
     const infectionRates = [2, 2, 2, 3, 3, 4, 4]
 
-    infectionRates.forEach((rate, position) => {
+    infectionRates.forEach((rate, index) => {
       const gameState = createTestGameState({
-        infectionRatePosition: position,
+        infectionRatePosition: index + 1,
         infectionRates,
       })
       const { unmount } = render(<StatusBar gameState={gameState} />)
