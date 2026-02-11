@@ -178,7 +178,7 @@
 ### Phase 19: Web UI (Spec: web-ui.md)
 
 - [x] Create React 19 + Vite 6 project in web/ subdirectory with @engine path alias
-- [ ] Set up useReducer hook wrapping engine functions (AppState with gameState, dialog, etc.)
+- [x] Set up useReducer hook wrapping engine functions (AppState with gameState, dialog, etc.)
 - [ ] Create SetupScreen component (player count, difficulty selectors, start button)
 - [ ] Create SVG WorldMap component (1200x700 viewBox, 48 cities with connections)
 - [ ] Add disease cubes, research stations, and player pawns to SVG map
