@@ -1,5 +1,5 @@
 import { CITIES } from '@engine/board'
-import type { Disease, GameState, Role } from '@engine/types'
+import type { Disease, GameState } from '@engine/types'
 import './WorldMap.css'
 
 interface WorldMapProps {

@@ -3,6 +3,7 @@ import { appReducer, initialState } from './state'
 import { SetupScreen } from './SetupScreen'
 import { WorldMap } from './WorldMap'
 import { StatusBar } from './StatusBar'
+import { PlayerPanel } from './PlayerPanel'
 import './App.css'
 
 function App() {
@@ -18,7 +19,6 @@ function App() {
   }
 
   // Game is active
-  const currentPlayer = state.game.getCurrentPlayer()
   const phase = state.game.getCurrentPhase()
   const actionsRemaining = state.game.getActionsRemaining()
   const gameState = state.game.getGameState()
@@ -64,13 +64,12 @@ function App() {
         onCityClick={handleCityClick}
       />
 
-      <div>
-        <h2>Current Turn</h2>
-        <p>Player: {currentPlayer.role}</p>
-        <p>Location: {currentPlayer.location}</p>
-        <p>Phase: {phase}</p>
-        {phase === 'actions' && <p>Actions remaining: {actionsRemaining}</p>}
-      </div>
+      <PlayerPanel
+        gameState={gameState}
+        currentPlayerIndex={gameState.currentPlayerIndex}
+        phase={phase}
+        actionsRemaining={actionsRemaining}
+      />
 
       <div>
         <h2>Actions</h2>

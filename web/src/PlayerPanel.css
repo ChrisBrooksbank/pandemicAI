@@ -1,0 +1,339 @@
+.PlayerPanel {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Player Tabs */
+.PlayerPanel_tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}
+
+.PlayerPanel_tab {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border-radius: 4px 4px 0 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.PlayerPanel_tab:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.PlayerPanel_tab--active {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  font-weight: 600;
+}
+
+.PlayerPanel_tab--current {
+  border-color: #ffd43b;
+}
+
+.PlayerPanel_tabRole {
+  font-size: 0.85rem;
+}
+
+.PlayerPanel_tabCurrentIndicator {
+  color: #ffd43b;
+  font-size: 1rem;
+}
+
+/* Role-specific tab colors */
+.PlayerPanel_tab[data-role='medic'] {
+  color: #ff922b;
+}
+
+.PlayerPanel_tab[data-role='scientist'] {
+  color: #d0bfff;
+}
+
+.PlayerPanel_tab[data-role='researcher'] {
+  color: #8ce99a;
+}
+
+.PlayerPanel_tab[data-role='operations_expert'] {
+  color: #74c0fc;
+}
+
+.PlayerPanel_tab[data-role='quarantine_specialist'] {
+  color: #a9e34b;
+}
+
+.PlayerPanel_tab[data-role='dispatcher'] {
+  color: #ffa8a8;
+}
+
+.PlayerPanel_tab[data-role='contingency_planner'] {
+  color: #94d82d;
+}
+
+/* Player Info */
+.PlayerPanel_info {
+  margin-bottom: 1rem;
+}
+
+.PlayerPanel_roleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.PlayerPanel_roleName {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Role-specific name colors */
+.PlayerPanel_roleName[data-role='medic'] {
+  color: #ff922b;
+}
+
+.PlayerPanel_roleName[data-role='scientist'] {
+  color: #d0bfff;
+}
+
+.PlayerPanel_roleName[data-role='researcher'] {
+  color: #8ce99a;
+}
+
+.PlayerPanel_roleName[data-role='operations_expert'] {
+  color: #74c0fc;
+}
+
+.PlayerPanel_roleName[data-role='quarantine_specialist'] {
+  color: #a9e34b;
+}
+
+.PlayerPanel_roleName[data-role='dispatcher'] {
+  color: #ffa8a8;
+}
+
+.PlayerPanel_roleName[data-role='contingency_planner'] {
+  color: #94d82d;
+}
+
+.PlayerPanel_phaseIndicator {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.PlayerPanel_phaseIndicator[data-phase='actions'] {
+  background-color: rgba(116, 192, 252, 0.2);
+  color: #74c0fc;
+  border: 1px solid #74c0fc;
+}
+
+.PlayerPanel_phaseIndicator[data-phase='draw'] {
+  background-color: rgba(255, 212, 59, 0.2);
+  color: #ffd43b;
+  border: 1px solid #ffd43b;
+}
+
+.PlayerPanel_phaseIndicator[data-phase='infect'] {
+  background-color: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+.PlayerPanel_actionsRemaining {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.PlayerPanel_location {
+  font-size: 0.9rem;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.PlayerPanel_location strong {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Player Hand */
+.PlayerPanel_hand {
+  margin-bottom: 1rem;
+}
+
+.PlayerPanel_handHeading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.PlayerPanel_cards {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.PlayerPanel_emptyHand {
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Stored Event (Contingency Planner) */
+.PlayerPanel_storedEvent {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Player Card */
+.PlayerCard {
+  width: 100px;
+  height: 140px;
+  border-radius: 6px;
+  border: 2px solid currentColor;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s;
+}
+
+.PlayerCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.PlayerCard_header {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.PlayerCard_footer {
+  font-size: 0.65rem;
+  text-transform: capitalize;
+  opacity: 0.6;
+}
+
+/* City Cards */
+.PlayerCard--city[data-color='blue'] {
+  background-color: rgba(77, 171, 247, 0.15);
+  border-color: #4dabf7;
+  color: #4dabf7;
+}
+
+.PlayerCard--city[data-color='yellow'] {
+  background-color: rgba(255, 212, 59, 0.15);
+  border-color: #ffd43b;
+  color: #ffd43b;
+}
+
+.PlayerCard--city[data-color='black'] {
+  background-color: rgba(134, 142, 150, 0.15);
+  border-color: #868e96;
+  color: #868e96;
+}
+
+.PlayerCard--city[data-color='red'] {
+  background-color: rgba(255, 107, 107, 0.15);
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+/* Event Cards */
+.PlayerCard--event {
+  background: linear-gradient(135deg, rgba(100, 108, 255, 0.2) 0%, rgba(82, 0, 130, 0.2) 100%);
+  border-color: #a78bfa;
+  color: #a78bfa;
+}
+
+.PlayerCard_eventName {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0.5rem 0;
+}
+
+/* Epidemic Cards */
+.PlayerCard--epidemic {
+  background: linear-gradient(135deg, rgba(255, 0, 0, 0.3) 0%, rgba(139, 0, 0, 0.3) 100%);
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+  animation: epidemicPulse 2s infinite;
+}
+
+@keyframes epidemicPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 107, 107, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 107, 107, 0.8);
+  }
+}
+
+/* Light mode adjustments */
+@media (prefers-color-scheme: light) {
+  .PlayerPanel {
+    background-color: #f5f5f5;
+  }
+
+  .PlayerPanel_tabs {
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .PlayerPanel_tab {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .PlayerPanel_tab:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .PlayerPanel_tab--active {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.2);
+  }
+
+  .PlayerPanel_handHeading {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .PlayerPanel_location {
+    color: rgba(0, 0, 0, 0.7);
+  }
+
+  .PlayerPanel_location strong {
+    color: rgba(0, 0, 0, 0.9);
+  }
+
+  .PlayerPanel_emptyHand {
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  .PlayerPanel_storedEvent {
+    border-top-color: rgba(0, 0, 0, 0.1);
+  }
+}
