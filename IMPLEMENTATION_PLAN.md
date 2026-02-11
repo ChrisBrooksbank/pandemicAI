@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 61
+- Build iterations: 62
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -265,3 +265,7 @@
     - **Fixed critical bug**: `getAvailableActions()` was returning `share-give` and `share-take` but orchestrator's `performAction()` expected `share-knowledge-give` and `share-knowledge-take`
     - Updated all action formats in game.ts, bot.ts, game.test.ts, and bot.test.ts to use consistent `share-knowledge-*` prefix
     - All tests now pass with deterministic outcomes!
+  - **Iteration 62: FIXED HeuristicBot infection deck danger test**:
+    - Test "should consider infection deck danger for move actions" was failing because it used incorrect property name `state.infectionDiscardPile`
+    - Fixed to use correct property name `state.infectionDiscard` (as defined in GameState type)
+    - All 1080 tests now pass reliably!

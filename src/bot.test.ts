@@ -698,7 +698,7 @@ describe("HeuristicBot", () => {
       if (!player) throw new Error("Player not found");
 
       // Add Chicago to infection discard pile
-      state.infectionDiscardPile = [
+      state.infectionDiscard = [
         { city: "Chicago", color: Disease.Blue },
         { city: "Montreal", color: Disease.Blue },
       ];
