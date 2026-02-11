@@ -794,6 +794,28 @@ export class PriorityBot implements Bot {
 }
 
 /**
+ * Configuration for assigning bots to specific player slots.
+ *
+ * Used for mixed human/bot games where some players are controlled by AI
+ * and others are controlled by humans (via UI).
+ *
+ * @example
+ * ```typescript
+ * // Player 0 is human, players 1 and 2 are bots
+ * const botConfigs: BotPlayerConfig[] = [
+ *   { playerIndex: 1, bot: new PriorityBot() },
+ *   { playerIndex: 2, bot: new RandomBot() }
+ * ];
+ * ```
+ */
+export interface BotPlayerConfig {
+  /** The index of the player slot (0-based) */
+  playerIndex: number;
+  /** The bot that controls this player */
+  bot: Bot;
+}
+
+/**
  * Result of running a bot game to completion.
  */
 export interface GameResult {

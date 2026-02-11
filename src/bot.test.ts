@@ -1,7 +1,7 @@
 // Tests for Bot interface
 
 import { describe, it, expect } from "vitest";
-import type { Bot } from "./bot";
+import type { Bot, BotPlayerConfig } from "./bot";
 import {
   RandomBot,
   PriorityBot,
@@ -99,6 +99,77 @@ describe("Bot interface", () => {
     const chosenAction = bot.chooseAction(state, actions);
     expect(typeof chosenAction).toBe("string");
     expect(actions).toContain(chosenAction);
+  });
+});
+
+describe("BotPlayerConfig", () => {
+  it("should allow assigning bots to specific player slots", () => {
+    const bot1 = new RandomBot();
+    const bot2 = new PriorityBot();
+
+    const botConfigs: BotPlayerConfig[] = [
+      { playerIndex: 0, bot: bot1 },
+      { playerIndex: 2, bot: bot2 },
+    ];
+
+    // Verify that botConfigs has the correct structure
+    expect(botConfigs).toHaveLength(2);
+    expect(botConfigs[0]?.playerIndex).toBe(0);
+    expect(botConfigs[0]?.bot).toBe(bot1);
+    expect(botConfigs[1]?.playerIndex).toBe(2);
+    expect(botConfigs[1]?.bot).toBe(bot2);
+  });
+
+  it("should allow mixed bot types in bot configs", () => {
+    const botConfigs: BotPlayerConfig[] = [
+      { playerIndex: 0, bot: new RandomBot() },
+      { playerIndex: 1, bot: new PriorityBot() },
+      { playerIndex: 2, bot: new HeuristicBot() },
+    ];
+
+    expect(botConfigs).toHaveLength(3);
+    expect(botConfigs[0]?.bot).toBeInstanceOf(RandomBot);
+    expect(botConfigs[1]?.bot).toBeInstanceOf(PriorityBot);
+    expect(botConfigs[2]?.bot).toBeInstanceOf(HeuristicBot);
+  });
+
+  it("should support sparse bot configurations (human players mixed with bots)", () => {
+    // Player 0 and 2 are human-controlled (no bot config)
+    // Player 1 and 3 are bot-controlled
+    const botConfigs: BotPlayerConfig[] = [
+      { playerIndex: 1, bot: new PriorityBot() },
+      { playerIndex: 3, bot: new HeuristicBot() },
+    ];
+
+    // A helper to check if a player is bot-controlled
+    const isBotPlayer = (playerIndex: number): boolean => {
+      return botConfigs.some((config) => config.playerIndex === playerIndex);
+    };
+
+    expect(isBotPlayer(0)).toBe(false); // Human
+    expect(isBotPlayer(1)).toBe(true); // Bot
+    expect(isBotPlayer(2)).toBe(false); // Human
+    expect(isBotPlayer(3)).toBe(true); // Bot
+  });
+
+  it("should allow retrieving bot for a specific player", () => {
+    const priorityBot = new PriorityBot();
+    const heuristicBot = new HeuristicBot();
+
+    const botConfigs: BotPlayerConfig[] = [
+      { playerIndex: 1, bot: priorityBot },
+      { playerIndex: 3, bot: heuristicBot },
+    ];
+
+    // Helper to get bot for player index
+    const getBotForPlayer = (playerIndex: number): Bot | undefined => {
+      return botConfigs.find((config) => config.playerIndex === playerIndex)?.bot;
+    };
+
+    expect(getBotForPlayer(0)).toBeUndefined(); // Human player
+    expect(getBotForPlayer(1)).toBe(priorityBot);
+    expect(getBotForPlayer(2)).toBeUndefined(); // Human player
+    expect(getBotForPlayer(3)).toBe(heuristicBot);
   });
 });
 

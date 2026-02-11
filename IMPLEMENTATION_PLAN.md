@@ -151,7 +151,7 @@
 - [x] Implement HeuristicBot with scored actions (disease threat, cure progress, station coverage, etc.)
 - [x] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
 - [x] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
-- [ ] Add BotPlayerConfig for mixed human/bot games
+- [x] Add BotPlayerConfig for mixed human/bot games
 - [ ] Add BotDecision diagnostics with score breakdowns for heuristic bot
 - [ ] Add unit tests for all bot strategies
 - [ ] Add integration tests: RandomBot 100 games (no crashes), PriorityBot 10%+ win rate on 4-epidemic difficulty
