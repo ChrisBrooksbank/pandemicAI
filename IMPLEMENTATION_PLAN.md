@@ -162,7 +162,7 @@
 - [x] Add schema validation on deserialization with clear error messages
 - [x] Implement SaveSlot type and SavePreview for save/load UI
 - [x] Define StorageBackend interface (save, load, list, delete)
-- [ ] Implement LocalStorageBackend for browser-based storage
+- [x] Implement LocalStorageBackend for browser-based storage
 - [ ] Implement FileSystemBackend for Node.js CLI/testing scenarios
 - [ ] Implement InMemoryBackend for testing
 - [ ] Implement saveGame(), loadGame(), listSaves(), deleteSave() with injectable backend

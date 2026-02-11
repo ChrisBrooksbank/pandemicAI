@@ -2,6 +2,22 @@
 
 import type { GameState } from "./types";
 
+// Type declarations for browser APIs
+declare global {
+  interface Window {
+    localStorage: Storage;
+  }
+  interface Storage {
+    readonly length: number;
+    clear(): void;
+    getItem(key: string): string | null;
+    key(index: number): string | null;
+    removeItem(key: string): void;
+    setItem(key: string, value: string): void;
+  }
+  const window: Window | undefined;
+}
+
 /**
  * Current schema version for serialized game state
  * Increment this when making breaking changes to the serialization format
@@ -181,4 +197,96 @@ export function deserializeGame(json: string): GameState {
   // If validation passes, return the state
   // TypeScript will trust our validation here
   return data.state as GameState;
+}
+
+/**
+ * LocalStorage-based storage backend for browser environments
+ * Uses window.localStorage to persist game saves
+ */
+export class LocalStorageBackend implements StorageBackend {
+  private readonly prefix: string;
+  private readonly storage: Storage;
+
+  /**
+   * Creates a new LocalStorageBackend
+   * @param prefix - Optional prefix for localStorage keys (default: "pandemic-save-")
+   * @throws {Error} If localStorage is not available (not in a browser environment)
+   */
+  constructor(prefix = "pandemic-save-") {
+    this.prefix = prefix;
+
+    // Check if localStorage is available
+    if (typeof window === "undefined" || !window.localStorage) {
+      throw new Error(
+        "localStorage is not available. LocalStorageBackend requires a browser environment.",
+      );
+    }
+
+    this.storage = window.localStorage;
+  }
+
+  /**
+   * Saves data to localStorage
+   * @param key - Unique identifier for the saved data
+   * @param data - The data to save (JSON string)
+   */
+  async save(key: string, data: string): Promise<void> {
+    try {
+      this.storage.setItem(this.prefix + key, data);
+    } catch (error) {
+      throw new Error(
+        `Failed to save to localStorage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Loads data from localStorage
+   * @param key - Unique identifier for the data to load
+   * @returns The saved data, or null if not found
+   */
+  async load(key: string): Promise<string | null> {
+    try {
+      return this.storage.getItem(this.prefix + key);
+    } catch (error) {
+      throw new Error(
+        `Failed to load from localStorage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Lists all saved game keys in localStorage
+   * @returns Array of save keys (without prefix)
+   */
+  async list(): Promise<string[]> {
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < this.storage.length; i++) {
+        const key = this.storage.key(i);
+        if (key?.startsWith(this.prefix)) {
+          keys.push(key.substring(this.prefix.length));
+        }
+      }
+      return keys;
+    } catch (error) {
+      throw new Error(
+        `Failed to list localStorage keys: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Deletes a saved game from localStorage
+   * @param key - Unique identifier for the data to delete
+   */
+  async delete(key: string): Promise<void> {
+    try {
+      this.storage.removeItem(this.prefix + key);
+    } catch (error) {
+      throw new Error(
+        `Failed to delete from localStorage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 }
