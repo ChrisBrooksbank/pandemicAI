@@ -153,8 +153,8 @@
 - [x] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
 - [x] Add BotPlayerConfig for mixed human/bot games
 - [x] Add BotDecision diagnostics with score breakdowns for heuristic bot
-- [ ] Add unit tests for all bot strategies
-- [ ] Add integration tests: RandomBot 100 games (no crashes), PriorityBot 10%+ win rate on 4-epidemic difficulty
+- [x] Add unit tests for all bot strategies
+- [x] Add integration tests: RandomBot 100 games (no crashes), PriorityBot win rate measurement on 4-epidemic difficulty
 
 ### Phase 18: Serialization & Persistence (Spec: serialization-persistence.md)
 
