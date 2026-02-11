@@ -188,7 +188,7 @@
 - [x] Create ActionBar component with phase-specific UI (Actions/Draw/Infect buttons)
 - [x] Implement action parser utility (parseAction, groupActionsByType, getMovementDestinations)
 - [x] Create all dialogs: DiscardDialog, EpidemicOverlay, ShareKnowledgeDialog, DiscoverCureDialog, ForecastDialog, AirliftDialog, GovernmentGrantDialog, ResilientPopulationDialog, GameOverDialog
-- [ ] Add event card menu (playable anytime, any phase)
+- [x] Add event card menu (playable anytime, any phase)
 - [ ] Add CSS styling with dark theme
 - [ ] Add integration tests for full game playthrough in web UI
 

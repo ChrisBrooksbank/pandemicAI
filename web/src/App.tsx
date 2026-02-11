@@ -14,6 +14,7 @@ import { ForecastDialog } from './ForecastDialog'
 import { AirliftDialog } from './AirliftDialog'
 import { GovernmentGrantDialog } from './GovernmentGrantDialog'
 import { ResilientPopulationDialog } from './ResilientPopulationDialog'
+import { EventMenu } from './EventMenu'
 import './App.css'
 
 function App() {
@@ -88,6 +89,9 @@ function App() {
         selectedAction={state.selectedAction}
         dispatch={dispatch}
       />
+
+      {/* Event Menu - floating button for playing event cards */}
+      <EventMenu gameState={gameState} dispatch={dispatch} />
 
       {/* Dialogs */}
       {state.dialog.type === 'discard' && (
