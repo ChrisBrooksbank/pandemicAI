@@ -256,7 +256,7 @@ function formatActionLabel(action: string): string {
 /**
  * Check if an action requires target selection (two-step flow)
  */
-function needsTargetSelection(action: string): boolean {
+function needsTargetSelection(_action: string): boolean {
   // Most actions with parameters are complete
   // Only a few action types need target selection
   // For now, all actions are complete from getAvailableActions()

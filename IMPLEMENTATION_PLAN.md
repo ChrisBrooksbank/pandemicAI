@@ -186,7 +186,7 @@
 - [x] Create StatusBar component (outbreak track, infection rate, cure indicators, cube supplies)
 - [x] Create PlayerPanel component (role, phase indicator, hand display, other player tabs)
 - [x] Create ActionBar component with phase-specific UI (Actions/Draw/Infect buttons)
-- [ ] Implement action parser utility (parseAction, groupActionsByType, getMovementDestinations)
+- [x] Implement action parser utility (parseAction, groupActionsByType, getMovementDestinations)
 - [ ] Create all dialogs: DiscardDialog, EpidemicOverlay, ShareKnowledgeDialog, DiscoverCureDialog, ForecastDialog, AirliftDialog, GovernmentGrantDialog, ResilientPopulationDialog, GameOverDialog
 - [ ] Add event card menu (playable anytime, any phase)
 - [ ] Add CSS styling with dark theme
