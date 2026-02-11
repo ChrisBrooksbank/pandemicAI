@@ -375,6 +375,7 @@ export function createGame(config: GameConfig): GameState {
     infectionDeck: infectionResult.infectionDeck,
     infectionDiscard: infectionResult.infectionDiscard,
     status: GameStatus.Ongoing,
+    turnNumber: 1,
     operationsExpertSpecialMoveUsed: false,
     skipNextInfectionPhase: false,
   };
@@ -789,11 +790,14 @@ export function advancePhase(state: GameState): GameState {
     case TurnPhase.Infect: {
       // Transition to Actions phase with next player
       const nextPlayerIndex = (state.currentPlayerIndex + 1) % state.players.length;
+      // Increment turn number when we cycle back to the first player
+      const turnNumber = nextPlayerIndex === 0 ? state.turnNumber + 1 : state.turnNumber;
       return {
         ...state,
         phase: TurnPhase.Actions,
         currentPlayerIndex: nextPlayerIndex,
         actionsRemaining: 4,
+        turnNumber,
         operationsExpertSpecialMoveUsed: false,
         skipNextInfectionPhase: false,
       };

@@ -224,6 +224,9 @@ export interface GameState {
   /** Overall game status (ongoing, won, lost) */
   status: GameStatus;
 
+  /** Current turn number (starts at 1, increments after each player completes their turn) */
+  turnNumber: number;
+
   /** Track if Operations Expert has used special move this turn */
   operationsExpertSpecialMoveUsed: boolean;
 

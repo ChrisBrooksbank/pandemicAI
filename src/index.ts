@@ -108,6 +108,10 @@ export {
 export {
   serializeGame,
   deserializeGame,
+  saveGame,
+  loadGame,
+  listSaves,
+  deleteSave,
   DeserializationError,
   LocalStorageBackend,
   FileSystemBackend,

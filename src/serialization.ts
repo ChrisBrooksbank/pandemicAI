@@ -1,6 +1,6 @@
 // Serialization and persistence functionality for Pandemic game state
 
-import type { GameState } from "./types";
+import { Role, type GameState } from "./types";
 
 // Type declarations for browser APIs
 declare global {
@@ -186,6 +186,7 @@ export function deserializeGame(json: string): GameState {
     "infectionDeck",
     "infectionDiscard",
     "status",
+    "turnNumber",
   ];
 
   for (const field of requiredFields) {
@@ -339,6 +340,128 @@ export class InMemoryBackend implements StorageBackend {
   clear(): void {
     this.storage.clear();
   }
+}
+
+/**
+ * Generates a SavePreview from a game state
+ * @param state - The game state to create a preview for
+ * @returns SavePreview with summary information
+ */
+function createSavePreview(state: GameState): SavePreview {
+  // Count how many diseases have been cured
+  const diseasesCured = Object.values(state.cures).filter(
+    (status) => status === "cured" || status === "eradicated",
+  ).length;
+
+  // Get current player's role
+  const currentPlayer = state.players[state.currentPlayerIndex];
+  const currentPlayerRole = currentPlayer !== undefined ? currentPlayer.role : Role.Medic;
+
+  return {
+    diseasesCured,
+    outbreakCount: state.outbreakCount,
+    currentPlayerRole,
+  };
+}
+
+/**
+ * Saves a game state to a storage backend
+ * @param state - The game state to save
+ * @param name - User-provided name for the saved game
+ * @param backend - Storage backend to use for saving
+ * @returns SaveSlot with metadata about the saved game
+ */
+export async function saveGame(
+  state: GameState,
+  name: string,
+  backend: StorageBackend,
+): Promise<SaveSlot> {
+  // Generate a unique ID for this save slot
+  const id = `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+  // Serialize the game state
+  const serialized = serializeGame(state);
+
+  // Save to backend
+  await backend.save(id, serialized);
+
+  // Create and return the save slot metadata
+  const saveSlot: SaveSlot = {
+    id,
+    name,
+    timestamp: Date.now(),
+    turnNumber: state.turnNumber,
+    playerCount: state.config.playerCount,
+    difficulty: state.config.difficulty,
+    preview: createSavePreview(state),
+  };
+
+  // Also save the metadata separately for quick listing
+  await backend.save(`${id}-metadata`, JSON.stringify(saveSlot));
+
+  return saveSlot;
+}
+
+/**
+ * Loads a game state from a storage backend
+ * @param slotId - Unique identifier of the save slot to load
+ * @param backend - Storage backend to use for loading
+ * @returns The reconstructed game state
+ * @throws {Error} If the save slot is not found or cannot be loaded
+ */
+export async function loadGame(slotId: string, backend: StorageBackend): Promise<GameState> {
+  // Load the serialized game state from backend
+  const serialized = await backend.load(slotId);
+
+  if (serialized === null) {
+    throw new Error(`Save slot not found: ${slotId}`);
+  }
+
+  // Deserialize and return the game state
+  return deserializeGame(serialized);
+}
+
+/**
+ * Lists all saved games from a storage backend
+ * @param backend - Storage backend to list saves from
+ * @returns Array of SaveSlot objects with metadata for each saved game
+ */
+export async function listSaves(backend: StorageBackend): Promise<SaveSlot[]> {
+  // Get all keys from the backend
+  const allKeys = await backend.list();
+
+  // Filter for metadata keys and load them
+  const metadataKeys = allKeys.filter((key) => key.endsWith("-metadata"));
+  const saveSlots: SaveSlot[] = [];
+
+  for (const metadataKey of metadataKeys) {
+    const metadataJson = await backend.load(metadataKey);
+    if (metadataJson !== null) {
+      try {
+        const saveSlot = JSON.parse(metadataJson) as SaveSlot;
+        saveSlots.push(saveSlot);
+      } catch {
+        // Skip invalid metadata entries
+        continue;
+      }
+    }
+  }
+
+  // Sort by timestamp (most recent first)
+  saveSlots.sort((a, b) => b.timestamp - a.timestamp);
+
+  return saveSlots;
+}
+
+/**
+ * Deletes a saved game from a storage backend
+ * @param slotId - Unique identifier of the save slot to delete
+ * @param backend - Storage backend to delete from
+ */
+export async function deleteSave(slotId: string, backend: StorageBackend): Promise<void> {
+  // Delete both the game state and metadata
+  await backend.delete(slotId);
+  await backend.delete(`${slotId}-metadata`);
 }
 
 /**

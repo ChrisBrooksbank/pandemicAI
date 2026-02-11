@@ -1,15 +1,20 @@
 // Tests for serialization and deserialization functionality
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   serializeGame,
   deserializeGame,
+  saveGame,
+  loadGame,
+  listSaves,
+  deleteSave,
   DeserializationError,
+  InMemoryBackend,
   SavePreview,
   SaveSlot,
 } from "./serialization";
 import { createGame } from "./game";
-import { GameState, Disease, Role } from "./types";
+import { GameState, Disease, Role, CureStatus } from "./types";
 
 describe("serializeGame", () => {
   it("should serialize a game state to JSON string", () => {
@@ -438,5 +443,311 @@ describe("SaveSlot", () => {
     };
 
     expect(slot1.id).not.toBe(slot2.id);
+  });
+});
+
+describe("saveGame", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should save a game and return a SaveSlot", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const saveSlot = await saveGame(state, "Test Save", backend);
+
+    expect(saveSlot.id).toBeDefined();
+    expect(saveSlot.name).toBe("Test Save");
+    expect(saveSlot.playerCount).toBe(2);
+    expect(saveSlot.difficulty).toBe(4);
+    expect(saveSlot.turnNumber).toBe(1);
+    expect(typeof saveSlot.timestamp).toBe("number");
+  });
+
+  it("should create a valid preview with diseases cured count", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    // Modify state to have 2 cured diseases
+    const modifiedState: GameState = {
+      ...state,
+      cures: {
+        [Disease.Blue]: CureStatus.Cured,
+        [Disease.Yellow]: CureStatus.Eradicated,
+        [Disease.Black]: CureStatus.Uncured,
+        [Disease.Red]: CureStatus.Uncured,
+      },
+    };
+
+    const saveSlot = await saveGame(modifiedState, "Test Save", backend);
+
+    expect(saveSlot.preview.diseasesCured).toBe(2);
+  });
+
+  it("should include outbreak count in preview", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const modifiedState: GameState = {
+      ...state,
+      outbreakCount: 5,
+    };
+
+    const saveSlot = await saveGame(modifiedState, "Test Save", backend);
+
+    expect(saveSlot.preview.outbreakCount).toBe(5);
+  });
+
+  it("should include current player role in preview", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const modifiedState: GameState = {
+      ...state,
+      players: state.players.map((p, i) => (i === 0 ? { ...p, role: Role.Scientist } : p)),
+    };
+
+    const saveSlot = await saveGame(modifiedState, "Test Save", backend);
+
+    expect(saveSlot.preview.currentPlayerRole).toBe(Role.Scientist);
+  });
+
+  it("should generate unique IDs for different saves", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+
+    const slot1 = await saveGame(state, "Save 1", backend);
+    const slot2 = await saveGame(state, "Save 2", backend);
+
+    expect(slot1.id).not.toBe(slot2.id);
+  });
+
+  it("should save both game data and metadata to backend", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const saveSlot = await saveGame(state, "Test Save", backend);
+
+    // Verify game data was saved
+    const gameData = await backend.load(saveSlot.id);
+    expect(gameData).not.toBeNull();
+
+    // Verify metadata was saved
+    const metadata = await backend.load(`${saveSlot.id}-metadata`);
+    expect(metadata).not.toBeNull();
+  });
+});
+
+describe("loadGame", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should load a saved game state", async () => {
+    const original = createGame({ playerCount: 3, difficulty: 5 });
+    const saveSlot = await saveGame(original, "Test Load", backend);
+
+    const loaded = await loadGame(saveSlot.id, backend);
+
+    expect(loaded).toEqual(original);
+  });
+
+  it("should throw an error for non-existent save slot", async () => {
+    await expect(loadGame("non-existent-id", backend)).rejects.toThrow("Save slot not found");
+  });
+
+  it("should handle round-trip save/load with perfect fidelity", async () => {
+    const original = createGame({ playerCount: 4, difficulty: 6 });
+    const modifiedState: GameState = {
+      ...original,
+      currentPlayerIndex: 2,
+      turnNumber: 7,
+      outbreakCount: 3,
+      cures: {
+        [Disease.Blue]: CureStatus.Cured,
+        [Disease.Yellow]: CureStatus.Uncured,
+        [Disease.Black]: CureStatus.Uncured,
+        [Disease.Red]: CureStatus.Uncured,
+      },
+    };
+
+    const saveSlot = await saveGame(modifiedState, "Test Round Trip", backend);
+    const loaded = await loadGame(saveSlot.id, backend);
+
+    expect(loaded).toEqual(modifiedState);
+    expect(loaded.turnNumber).toBe(7);
+    expect(loaded.currentPlayerIndex).toBe(2);
+    expect(loaded.outbreakCount).toBe(3);
+    expect(loaded.cures[Disease.Blue]).toBe(CureStatus.Cured);
+  });
+});
+
+describe("listSaves", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should return an empty array when no saves exist", async () => {
+    const saves = await listSaves(backend);
+    expect(saves).toEqual([]);
+  });
+
+  it("should list all saved games", async () => {
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = createGame({ playerCount: 3, difficulty: 5 });
+
+    await saveGame(state1, "Save 1", backend);
+    await saveGame(state2, "Save 2", backend);
+
+    const saves = await listSaves(backend);
+
+    expect(saves).toHaveLength(2);
+    expect(saves.map((s) => s.name)).toContain("Save 1");
+    expect(saves.map((s) => s.name)).toContain("Save 2");
+  });
+
+  it("should return saves sorted by timestamp (most recent first)", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Save multiple games with slight delay to ensure different timestamps
+    await saveGame(state, "First", backend);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await saveGame(state, "Second", backend);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await saveGame(state, "Third", backend);
+
+    const saves = await listSaves(backend);
+
+    expect(saves).toHaveLength(3);
+    expect(saves[0]?.name).toBe("Third");
+    expect(saves[1]?.name).toBe("Second");
+    expect(saves[2]?.name).toBe("First");
+  });
+
+  it("should include all save slot metadata", async () => {
+    const state = createGame({ playerCount: 3, difficulty: 5 });
+    const modifiedState: GameState = {
+      ...state,
+      turnNumber: 10,
+      outbreakCount: 4,
+      cures: {
+        [Disease.Blue]: CureStatus.Cured,
+        [Disease.Yellow]: CureStatus.Cured,
+        [Disease.Black]: CureStatus.Uncured,
+        [Disease.Red]: CureStatus.Uncured,
+      },
+    };
+
+    await saveGame(modifiedState, "Complete Save", backend);
+
+    const saves = await listSaves(backend);
+
+    expect(saves).toHaveLength(1);
+    const save = saves[0];
+    expect(save).toBeDefined();
+    if (save) {
+      expect(save.name).toBe("Complete Save");
+      expect(save.playerCount).toBe(3);
+      expect(save.difficulty).toBe(5);
+      expect(save.turnNumber).toBe(10);
+      expect(save.preview.diseasesCured).toBe(2);
+      expect(save.preview.outbreakCount).toBe(4);
+    }
+  });
+
+  it("should skip corrupted metadata entries gracefully", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    await saveGame(state, "Valid Save", backend);
+
+    // Manually add corrupted metadata
+    await backend.save("corrupted-metadata", "{ invalid json");
+
+    const saves = await listSaves(backend);
+
+    // Should only return the valid save
+    expect(saves).toHaveLength(1);
+    expect(saves[0]?.name).toBe("Valid Save");
+  });
+});
+
+describe("deleteSave", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should delete a saved game", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const saveSlot = await saveGame(state, "To Delete", backend);
+
+    await deleteSave(saveSlot.id, backend);
+
+    // Verify game data is deleted
+    const gameData = await backend.load(saveSlot.id);
+    expect(gameData).toBeNull();
+
+    // Verify metadata is deleted
+    const metadata = await backend.load(`${saveSlot.id}-metadata`);
+    expect(metadata).toBeNull();
+  });
+
+  it("should remove save from list after deletion", async () => {
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    const slot1 = await saveGame(state, "Keep", backend);
+    const slot2 = await saveGame(state, "Delete", backend);
+
+    await deleteSave(slot2.id, backend);
+
+    const saves = await listSaves(backend);
+    expect(saves).toHaveLength(1);
+    expect(saves[0]?.id).toBe(slot1.id);
+  });
+
+  it("should not throw when deleting non-existent save", async () => {
+    // Should complete without error
+    await expect(deleteSave("non-existent-id", backend)).resolves.toBeUndefined();
+  });
+});
+
+describe("save/load integration", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should support saving multiple games and loading them independently", async () => {
+    const game1 = createGame({ playerCount: 2, difficulty: 4 });
+    const game2 = createGame({ playerCount: 3, difficulty: 5 });
+    const game3 = createGame({ playerCount: 4, difficulty: 6 });
+
+    const slot1 = await saveGame(game1, "Game 1", backend);
+    const slot2 = await saveGame(game2, "Game 2", backend);
+    const slot3 = await saveGame(game3, "Game 3", backend);
+
+    const loaded1 = await loadGame(slot1.id, backend);
+    const loaded2 = await loadGame(slot2.id, backend);
+    const loaded3 = await loadGame(slot3.id, backend);
+
+    expect(loaded1.config.playerCount).toBe(2);
+    expect(loaded2.config.playerCount).toBe(3);
+    expect(loaded3.config.playerCount).toBe(4);
+  });
+
+  it("should handle overwriting a save with the same name", async () => {
+    const game1 = createGame({ playerCount: 2, difficulty: 4 });
+    const game2 = createGame({ playerCount: 3, difficulty: 5 });
+
+    const slot1 = await saveGame(game1, "My Game", backend);
+    const slot2 = await saveGame(game2, "My Game", backend);
+
+    // Both saves should exist with different IDs
+    const saves = await listSaves(backend);
+    expect(saves).toHaveLength(2);
+    expect(saves.filter((s) => s.name === "My Game")).toHaveLength(2);
+
+    // Each should be loadable independently
+    const loaded1 = await loadGame(slot1.id, backend);
+    const loaded2 = await loadGame(slot2.id, backend);
+
+    expect(loaded1.config.playerCount).toBe(2);
+    expect(loaded2.config.playerCount).toBe(3);
   });
 });
