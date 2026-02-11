@@ -1,5 +1,6 @@
 import { useReducer } from 'react'
 import { appReducer, initialState } from './state'
+import { SetupScreen } from './SetupScreen'
 import './App.css'
 
 function App() {
@@ -8,17 +9,9 @@ function App() {
   // If no game is started, show setup screen
   if (!state.game) {
     return (
-      <div>
-        <h1>Pandemic Game Engine</h1>
-        <p>Setup screen coming soon...</p>
-        <button
-          onClick={() =>
-            dispatch({ type: 'START_GAME', config: { playerCount: 2, difficulty: 4 } })
-          }
-        >
-          Start Game (2 players, 4 epidemics)
-        </button>
-      </div>
+      <SetupScreen
+        onStartGame={(config) => dispatch({ type: 'START_GAME', config })}
+      />
     )
   }
 
