@@ -1,0 +1,183 @@
+.DiscoverCureDialog_overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.DiscoverCureDialog_modal {
+  background-color: #1a1a1a;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.DiscoverCureDialog_header {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.DiscoverCureDialog_title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  color: #51cf66;
+}
+
+.DiscoverCureDialog_subtitle {
+  font-size: 1rem;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.DiscoverCureDialog_disease {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.DiscoverCureDialog_disease--blue {
+  color: #4dabf7;
+}
+
+.DiscoverCureDialog_disease--yellow {
+  color: #ffd43b;
+}
+
+.DiscoverCureDialog_disease--black {
+  color: #868e96;
+}
+
+.DiscoverCureDialog_disease--red {
+  color: #ff6b6b;
+}
+
+.DiscoverCureDialog_body {
+  margin-bottom: 1.5rem;
+}
+
+.DiscoverCureDialog_cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.DiscoverCureDialog_card {
+  padding: 1rem;
+  border-radius: 8px;
+  border: 2px solid currentColor;
+  background-color: rgba(0, 0, 0, 0.3);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.DiscoverCureDialog_card--blue {
+  border-color: #4dabf7;
+  color: #4dabf7;
+  box-shadow: 0 0 8px rgba(77, 171, 247, 0.3);
+}
+
+.DiscoverCureDialog_card--yellow {
+  border-color: #ffd43b;
+  color: #ffd43b;
+  box-shadow: 0 0 8px rgba(255, 212, 59, 0.3);
+}
+
+.DiscoverCureDialog_card--black {
+  border-color: #868e96;
+  color: #868e96;
+  box-shadow: 0 0 8px rgba(134, 142, 150, 0.3);
+}
+
+.DiscoverCureDialog_card--red {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
+}
+
+.DiscoverCureDialog_footer {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.DiscoverCureDialog_button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.DiscoverCureDialog_button--confirm {
+  background-color: #51cf66;
+  color: white;
+}
+
+.DiscoverCureDialog_button--confirm:hover {
+  background-color: #40c057;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(81, 207, 102, 0.4);
+}
+
+.DiscoverCureDialog_button--cancel {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.DiscoverCureDialog_button--cancel:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+@media (prefers-color-scheme: light) {
+  .DiscoverCureDialog_modal {
+    background-color: #f5f5f5;
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .DiscoverCureDialog_title {
+    color: #37b24d;
+  }
+
+  .DiscoverCureDialog_subtitle {
+    color: rgba(0, 0, 0, 0.7);
+  }
+
+  .DiscoverCureDialog_card {
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .DiscoverCureDialog_button--confirm {
+    background-color: #37b24d;
+  }
+
+  .DiscoverCureDialog_button--confirm:hover {
+    background-color: #2f9e44;
+  }
+
+  .DiscoverCureDialog_button--cancel {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #1a1a1a;
+    border-color: rgba(0, 0, 0, 0.2);
+  }
+
+  .DiscoverCureDialog_button--cancel:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+}

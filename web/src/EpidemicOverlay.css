@@ -1,0 +1,200 @@
+.EpidemicOverlay_overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: EpidemicOverlay_fadeIn 0.3s ease;
+}
+
+@keyframes EpidemicOverlay_fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.EpidemicOverlay_modal {
+  background-color: #2d0a0a;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  border: 3px solid #ff6b6b;
+  box-shadow: 0 8px 32px rgba(255, 107, 107, 0.6);
+  animation: EpidemicOverlay_pulse 0.5s ease;
+}
+
+@keyframes EpidemicOverlay_pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.EpidemicOverlay_header {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.EpidemicOverlay_title {
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin: 0;
+  color: #ff6b6b;
+  text-shadow: 0 0 20px rgba(255, 107, 107, 0.8);
+  letter-spacing: 0.1em;
+}
+
+.EpidemicOverlay_body {
+  margin-bottom: 1.5rem;
+}
+
+.EpidemicOverlay_info {
+  background-color: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.EpidemicOverlay_info:last-child {
+  margin-bottom: 0;
+}
+
+.EpidemicOverlay_detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.EpidemicOverlay_detail:last-child {
+  margin-bottom: 0;
+}
+
+.EpidemicOverlay_label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
+.EpidemicOverlay_city {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.EpidemicOverlay_city--blue {
+  color: #4dabf7;
+}
+
+.EpidemicOverlay_city--yellow {
+  color: #ffd43b;
+}
+
+.EpidemicOverlay_city--black {
+  color: #868e96;
+}
+
+.EpidemicOverlay_city--red {
+  color: #ff6b6b;
+}
+
+.EpidemicOverlay_disease {
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  border: 2px solid currentColor;
+}
+
+.EpidemicOverlay_disease--blue {
+  color: #4dabf7;
+  background-color: rgba(77, 171, 247, 0.2);
+}
+
+.EpidemicOverlay_disease--yellow {
+  color: #ffd43b;
+  background-color: rgba(255, 212, 59, 0.2);
+}
+
+.EpidemicOverlay_disease--black {
+  color: #868e96;
+  background-color: rgba(134, 142, 150, 0.2);
+}
+
+.EpidemicOverlay_disease--red {
+  color: #ff6b6b;
+  background-color: rgba(255, 107, 107, 0.2);
+}
+
+.EpidemicOverlay_rate {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffd43b;
+}
+
+.EpidemicOverlay_footer {
+  display: flex;
+  justify-content: center;
+}
+
+.EpidemicOverlay_button {
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  border: 2px solid #ff6b6b;
+  background-color: #ff6b6b;
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.EpidemicOverlay_button:hover {
+  background-color: #fa5252;
+  border-color: #fa5252;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.6);
+}
+
+@media (prefers-color-scheme: light) {
+  .EpidemicOverlay_modal {
+    background-color: #ffe0e0;
+    border-color: #d63939;
+  }
+
+  .EpidemicOverlay_title {
+    color: #d63939;
+    text-shadow: 0 0 20px rgba(214, 57, 57, 0.4);
+  }
+
+  .EpidemicOverlay_info {
+    background-color: rgba(214, 57, 57, 0.1);
+  }
+
+  .EpidemicOverlay_label {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .EpidemicOverlay_button {
+    background-color: #d63939;
+    border-color: #d63939;
+  }
+
+  .EpidemicOverlay_button:hover {
+    background-color: #c92a2a;
+    border-color: #c92a2a;
+  }
+}

@@ -5,6 +5,15 @@ import { WorldMap } from './WorldMap'
 import { StatusBar } from './StatusBar'
 import { PlayerPanel } from './PlayerPanel'
 import { ActionBar } from './ActionBar'
+import { DiscardDialog } from './DiscardDialog'
+import { EpidemicOverlay } from './EpidemicOverlay'
+import { GameOverDialog } from './GameOverDialog'
+import { ShareKnowledgeDialog } from './ShareKnowledgeDialog'
+import { DiscoverCureDialog } from './DiscoverCureDialog'
+import { ForecastDialog } from './ForecastDialog'
+import { AirliftDialog } from './AirliftDialog'
+import { GovernmentGrantDialog } from './GovernmentGrantDialog'
+import { ResilientPopulationDialog } from './ResilientPopulationDialog'
 import './App.css'
 
 function App() {
@@ -80,23 +89,64 @@ function App() {
         dispatch={dispatch}
       />
 
+      {/* Dialogs */}
+      {state.dialog.type === 'discard' && (
+        <DiscardDialog
+          playerIndex={state.dialog.playerIndex}
+          playerHand={gameState.players[state.dialog.playerIndex]?.hand ?? []}
+          dispatch={dispatch}
+        />
+      )}
+
       {state.dialog.type === 'epidemic' && (
-        <div style={{ border: '2px solid red', padding: '1rem', margin: '1rem' }}>
-          <h2>EPIDEMIC!</h2>
-          {state.dialog.epidemics.map((epidemic, i) => (
-            <p key={i}>
-              {epidemic.infectedCity} infected with {epidemic.infectedColor}!
-            </p>
-          ))}
-          <button onClick={() => dispatch({ type: 'CONFIRM_EPIDEMIC' })}>Continue</button>
-        </div>
+        <EpidemicOverlay epidemics={state.dialog.epidemics} dispatch={dispatch} />
       )}
 
       {state.dialog.type === 'gameOver' && (
-        <div style={{ border: '2px solid white', padding: '1rem', margin: '1rem' }}>
-          <h2>{state.dialog.won ? 'Victory!' : 'Game Over'}</h2>
-          <button onClick={() => dispatch({ type: 'CLOSE_DIALOG' })}>Close</button>
-        </div>
+        <GameOverDialog
+          won={state.dialog.won}
+          reason={state.dialog.reason}
+          dispatch={dispatch}
+        />
+      )}
+
+      {state.dialog.type === 'shareKnowledge' && (
+        <ShareKnowledgeDialog options={state.dialog.options} dispatch={dispatch} />
+      )}
+
+      {state.dialog.type === 'discoverCure' && (
+        <DiscoverCureDialog
+          playerHand={gameState.players[gameState.currentPlayerIndex]?.hand ?? []}
+          diseaseColor={
+            state.dialog.cardIndices[0] !== undefined
+              ? (gameState.players[gameState.currentPlayerIndex]?.hand[state.dialog.cardIndices[0]]?.type === 'city'
+                  ? gameState.players[gameState.currentPlayerIndex]?.hand[state.dialog.cardIndices[0]]?.color
+                  : 'blue') ?? 'blue'
+              : 'blue'
+          }
+          cardIndices={state.dialog.cardIndices}
+          dispatch={dispatch}
+        />
+      )}
+
+      {state.dialog.type === 'forecast' && (
+        <ForecastDialog cards={state.dialog.cards} dispatch={dispatch} />
+      )}
+
+      {state.dialog.type === 'airlift' && (
+        <AirliftDialog gameState={gameState} dispatch={dispatch} />
+      )}
+
+      {state.dialog.type === 'governmentGrant' && (
+        <GovernmentGrantDialog gameState={gameState} dispatch={dispatch} />
+      )}
+
+      {state.dialog.type === 'resilientPopulation' && (
+        <ResilientPopulationDialog
+          discardPile={state.dialog.discardPile}
+          currentPlayerIndex={gameState.currentPlayerIndex}
+          dispatch={dispatch}
+        />
       )}
     </div>
   )
