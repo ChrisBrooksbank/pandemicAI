@@ -6,6 +6,9 @@ interface StatusBarProps {
   gameState: GameState
 }
 
+// Infection rate track (positions 1-7, starting at position 1)
+const INFECTION_RATES = [2, 2, 2, 3, 3, 4, 4]
+
 /**
  * StatusBar displays key game state indicators:
  * - Outbreak track (0-8)
@@ -14,7 +17,7 @@ interface StatusBarProps {
  * - Cube supply for all 4 diseases
  */
 export function StatusBar({ gameState }: StatusBarProps) {
-  const infectionRate = gameState.infectionRates[gameState.infectionRatePosition]
+  const infectionRate = INFECTION_RATES[gameState.infectionRatePosition - 1] ?? 2
   const outbreakCount = gameState.outbreakCount
 
   // Calculate remaining cubes for each disease

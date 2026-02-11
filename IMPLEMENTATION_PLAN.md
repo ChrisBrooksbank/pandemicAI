@@ -190,7 +190,7 @@
 - [x] Create all dialogs: DiscardDialog, EpidemicOverlay, ShareKnowledgeDialog, DiscoverCureDialog, ForecastDialog, AirliftDialog, GovernmentGrantDialog, ResilientPopulationDialog, GameOverDialog
 - [x] Add event card menu (playable anytime, any phase)
 - [x] Add CSS styling with dark theme
-- [ ] Add integration tests for full game playthrough in web UI
+- [x] Add integration tests for full game playthrough in web UI
 
 ## Completed
 
