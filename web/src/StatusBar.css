@@ -1,0 +1,236 @@
+.StatusBar {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.StatusBar_section {
+  flex: 1;
+  min-width: 200px;
+}
+
+.StatusBar_heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.StatusBar_detail {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0.25rem 0 0 0;
+}
+
+/* Outbreak Track */
+.StatusBar_outbreakTrack {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: center;
+}
+
+.StatusBar_outbreakMarker {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.StatusBar_outbreakMarker--active {
+  border-color: #ff6b6b;
+  background-color: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+}
+
+.StatusBar_outbreakMarker--danger {
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+/* Infection Rate */
+.StatusBar_infectionRate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.StatusBar_infectionRateValue {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #ffd43b;
+  line-height: 1;
+}
+
+/* Cure Indicators */
+.StatusBar_cures {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.StatusBar_cure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.StatusBar_cureIndicator {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  border: 3px solid currentColor;
+  position: relative;
+}
+
+.StatusBar_cureIndicator--blue {
+  color: #4dabf7;
+}
+
+.StatusBar_cureIndicator--yellow {
+  color: #ffd43b;
+}
+
+.StatusBar_cureIndicator--black {
+  color: #868e96;
+}
+
+.StatusBar_cureIndicator--red {
+  color: #ff6b6b;
+}
+
+.StatusBar_cureIndicator[data-status='uncured'] {
+  opacity: 0.3;
+  border-style: dashed;
+}
+
+.StatusBar_cureIndicator[data-status='cured'] {
+  opacity: 1;
+  border-style: solid;
+  box-shadow: 0 0 12px currentColor;
+}
+
+.StatusBar_cureIndicator[data-status='eradicated'] {
+  opacity: 1;
+  border-style: solid;
+  box-shadow: 0 0 20px currentColor;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+}
+
+.StatusBar_cureSymbol {
+  font-weight: 700;
+}
+
+.StatusBar_cureLabel {
+  font-size: 0.75rem;
+  margin: 0;
+  text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Cube Supply */
+.StatusBar_cubeSupply {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.StatusBar_cubeCounter {
+  position: relative;
+  height: 1.5rem;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.StatusBar_cubeBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: width 0.3s ease;
+  opacity: 0.6;
+}
+
+.StatusBar_cubeBar--blue {
+  background-color: #4dabf7;
+}
+
+.StatusBar_cubeBar--yellow {
+  background-color: #ffd43b;
+}
+
+.StatusBar_cubeBar--black {
+  background-color: #868e96;
+}
+
+.StatusBar_cubeBar--red {
+  background-color: #ff6b6b;
+}
+
+.StatusBar_cubeCount {
+  position: relative;
+  z-index: 1;
+  font-size: 0.75rem;
+  margin: 0;
+  line-height: 1.5rem;
+  padding: 0 0.5rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-color-scheme: light) {
+  .StatusBar {
+    background-color: #f5f5f5;
+  }
+
+  .StatusBar_heading {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .StatusBar_detail {
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .StatusBar_outbreakMarker {
+    border-color: rgba(0, 0, 0, 0.2);
+    background-color: rgba(255, 255, 255, 0.5);
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  .StatusBar_outbreakMarker--active {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #d63939;
+  }
+
+  .StatusBar_cureLabel {
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .StatusBar_cubeCounter {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .StatusBar_cubeCount {
+    color: rgba(0, 0, 0, 0.9);
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  }
+}

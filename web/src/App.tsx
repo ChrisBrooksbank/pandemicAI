@@ -2,6 +2,7 @@ import { useReducer } from 'react'
 import { appReducer, initialState } from './state'
 import { SetupScreen } from './SetupScreen'
 import { WorldMap } from './WorldMap'
+import { StatusBar } from './StatusBar'
 import './App.css'
 
 function App() {
@@ -54,6 +55,8 @@ function App() {
     <div>
       <h1>Pandemic Game</h1>
 
+      <StatusBar gameState={gameState} />
+
       <WorldMap
         gameState={gameState}
         availableActions={availableActions}
@@ -67,12 +70,6 @@ function App() {
         <p>Location: {currentPlayer.location}</p>
         <p>Phase: {phase}</p>
         {phase === 'actions' && <p>Actions remaining: {actionsRemaining}</p>}
-      </div>
-
-      <div>
-        <h2>Game Status</h2>
-        <p>Outbreak count: {gameState.outbreakCount}</p>
-        <p>Infection rate: {gameState.infectionRatePosition}</p>
       </div>
 
       <div>
