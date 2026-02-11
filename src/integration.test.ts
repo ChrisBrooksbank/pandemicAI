@@ -841,3 +841,503 @@ describe("Integration: Complete Multi-Turn Game", () => {
     expect(state.players).toHaveLength(2);
   });
 });
+
+describe("Integration: Save/Load Workflow", () => {
+  it("should save a game, then load it and continue playing", async () => {
+    const { saveGame, loadGame, InMemoryBackend } = await import("./serialization");
+
+    // Create a backend for testing
+    const backend = new InMemoryBackend();
+
+    // Start a game
+    let state = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Play a few actions to get interesting state
+    const moveResult = driveFerry(state, "Chicago");
+    if (!moveResult.success) throw new Error("Move failed");
+    state = moveResult.state;
+
+    // Record state before save
+    const player0Location = state.players[0]?.location;
+    const actionsRemaining = state.actionsRemaining;
+    const turnNumber = state.turnNumber;
+
+    // Save the game
+    const saveSlot = await saveGame(state, "Integration Test Save", backend);
+
+    // Verify save metadata
+    expect(saveSlot.name).toBe("Integration Test Save");
+    expect(saveSlot.playerCount).toBe(2);
+    expect(saveSlot.difficulty).toBe(4);
+    expect(saveSlot.turnNumber).toBe(turnNumber);
+
+    // Load the game
+    const loadedState = await loadGame(saveSlot.id, backend);
+
+    // Verify loaded state matches saved state
+    expect(loadedState.players[0]?.location).toBe(player0Location);
+    expect(loadedState.actionsRemaining).toBe(actionsRemaining);
+    expect(loadedState.turnNumber).toBe(turnNumber);
+    expect(loadedState.config.playerCount).toBe(2);
+    expect(loadedState.config.difficulty).toBe(4);
+
+    // Continue playing from loaded state
+    const continueResult = driveFerry(loadedState, "Atlanta");
+    if (!continueResult.success) throw new Error("Continue move failed");
+
+    expect(continueResult.state.actionsRemaining).toBe(actionsRemaining - 1);
+    expect(continueResult.state.players[0]?.location).toBe("Atlanta");
+  });
+
+  it("should handle multiple save slots independently", async () => {
+    const { saveGame, loadGame, listSaves, deleteSave, InMemoryBackend } =
+      await import("./serialization");
+
+    const backend = new InMemoryBackend();
+
+    // Create three different game states
+    const game1 = createGame({ playerCount: 2, difficulty: 4 });
+    const game2Result = driveFerry(game1, "Chicago");
+    if (!game2Result.success) throw new Error("Move failed");
+    const game2 = game2Result.state;
+
+    const game3Result = driveFerry(game2, "Atlanta");
+    if (!game3Result.success) throw new Error("Move failed");
+    const game3 = game3Result.state;
+
+    // Save all three
+    const slot1 = await saveGame(game1, "Game 1", backend);
+    const slot2 = await saveGame(game2, "Game 2", backend);
+    const slot3 = await saveGame(game3, "Game 3", backend);
+
+    // List all saves
+    const saves = await listSaves(backend);
+    expect(saves).toHaveLength(3);
+
+    // Load and verify each save independently
+    const loaded1 = await loadGame(slot1.id, backend);
+    const loaded2 = await loadGame(slot2.id, backend);
+    const loaded3 = await loadGame(slot3.id, backend);
+
+    expect(loaded1.players[0]?.location).toBe("Atlanta");
+    expect(loaded1.actionsRemaining).toBe(4);
+
+    expect(loaded2.players[0]?.location).toBe("Chicago");
+    expect(loaded2.actionsRemaining).toBe(3);
+
+    expect(loaded3.players[0]?.location).toBe("Atlanta");
+    expect(loaded3.actionsRemaining).toBe(2);
+
+    // Delete one save
+    await deleteSave(slot2.id, backend);
+
+    const remainingSaves = await listSaves(backend);
+    expect(remainingSaves).toHaveLength(2);
+    expect(remainingSaves.map((s) => s.id)).not.toContain(slot2.id);
+  });
+
+  it("should preserve complex game state through save/load", async () => {
+    const { saveGame, loadGame, InMemoryBackend } = await import("./serialization");
+
+    const backend = new InMemoryBackend();
+
+    // Create a game with complex state
+    let state = createGame({ playerCount: 3, difficulty: 5 });
+
+    // Modify state to have interesting data
+    // - Move a player
+    const moveResult = driveFerry(state, "Chicago");
+    if (!moveResult.success) throw new Error("Move failed");
+    state = moveResult.state;
+
+    // - Treat disease if there are cubes
+    const chicago = state.board["Chicago"];
+    if (chicago && chicago.blue > 0) {
+      const treatResult = treatDisease(state, Disease.Blue);
+      if (treatResult.success) {
+        state = treatResult.state;
+      }
+    }
+
+    // Save and load
+    const saveSlot = await saveGame(state, "Complex State", backend);
+    const loadedState = await loadGame(saveSlot.id, backend);
+
+    // Verify all aspects of state are preserved
+    expect(loadedState.config).toEqual(state.config);
+    expect(loadedState.players).toEqual(state.players);
+    expect(loadedState.board).toEqual(state.board);
+    expect(loadedState.cures).toEqual(state.cures);
+    expect(loadedState.cubeSupply).toEqual(state.cubeSupply);
+    expect(loadedState.infectionRatePosition).toBe(state.infectionRatePosition);
+    expect(loadedState.outbreakCount).toBe(state.outbreakCount);
+    expect(loadedState.phase).toBe(state.phase);
+    expect(loadedState.actionsRemaining).toBe(state.actionsRemaining);
+    expect(loadedState.turnNumber).toBe(state.turnNumber);
+  });
+});
+
+describe("Integration: Undo/Redo Workflow", () => {
+  it("should undo multiple actions and redo them", async () => {
+    const { createGameHistory, pushState, undo, redo, canUndo, canRedo } =
+      await import("./serialization");
+
+    // Create initial game state
+    let state = createGame({ playerCount: 2, difficulty: 4 });
+    let history = createGameHistory();
+
+    // Record initial state
+    history = pushState(history, state, "Initial state");
+
+    // Perform action 1: Move to Chicago
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move 1 failed");
+    state = move1.state;
+    history = pushState(history, state, "Move to Chicago");
+
+    // Perform action 2: Move back to Atlanta
+    const move2 = driveFerry(state, "Atlanta");
+    if (!move2.success) throw new Error("Move 2 failed");
+    state = move2.state;
+    history = pushState(history, state, "Move to Atlanta");
+
+    // Perform action 3: Move to Chicago again
+    const move3 = driveFerry(state, "Chicago");
+    if (!move3.success) throw new Error("Move 3 failed");
+    state = move3.state;
+    history = pushState(history, state, "Move to Chicago again");
+
+    // Verify we can undo
+    expect(canUndo(state, history)).toBe(true);
+
+    // Undo action 3
+    const undo1 = undo(history);
+    expect(undo1).not.toBeNull();
+    if (!undo1) throw new Error("Undo 1 failed");
+
+    state = undo1.state;
+    history = undo1.history;
+    expect(state.players[0]?.location).toBe("Atlanta");
+    expect(state.actionsRemaining).toBe(2);
+
+    // Undo action 2
+    const undo2 = undo(history);
+    expect(undo2).not.toBeNull();
+    if (!undo2) throw new Error("Undo 2 failed");
+
+    state = undo2.state;
+    history = undo2.history;
+    expect(state.players[0]?.location).toBe("Chicago");
+    expect(state.actionsRemaining).toBe(3);
+
+    // Verify we can redo
+    expect(canRedo(state, history)).toBe(true);
+
+    // Redo action 2
+    const redo1 = redo(history);
+    expect(redo1).not.toBeNull();
+    if (!redo1) throw new Error("Redo 1 failed");
+
+    state = redo1.state;
+    history = redo1.history;
+    expect(state.players[0]?.location).toBe("Atlanta");
+    expect(state.actionsRemaining).toBe(2);
+
+    // Redo action 3
+    const redo2 = redo(history);
+    expect(redo2).not.toBeNull();
+    if (!redo2) throw new Error("Redo 2 failed");
+
+    state = redo2.state;
+    history = redo2.history;
+    expect(state.players[0]?.location).toBe("Chicago");
+    expect(state.actionsRemaining).toBe(1);
+  });
+
+  it("should clear redo stack when new action is performed after undo", async () => {
+    const { createGameHistory, pushState, undo, redo } = await import("./serialization");
+
+    let state = createGame({ playerCount: 2, difficulty: 4 });
+    let history = createGameHistory();
+
+    // Build history
+    history = pushState(history, state, "Initial");
+
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move failed");
+    state = move1.state;
+    history = pushState(history, state, "Move to Chicago");
+
+    const move2 = driveFerry(state, "Atlanta");
+    if (!move2.success) throw new Error("Move failed");
+    state = move2.state;
+    history = pushState(history, state, "Move to Atlanta");
+
+    // Undo once
+    const undoResult = undo(history);
+    if (!undoResult) throw new Error("Undo failed");
+    state = undoResult.state;
+    history = undoResult.history;
+
+    // Perform new action (branching)
+    const move3 = driveFerry(state, "Montreal");
+    if (!move3.success) throw new Error("New move failed");
+    state = move3.state;
+    history = pushState(history, state, "Move to Montreal");
+
+    // Should not be able to redo anymore
+    const redoResult = redo(history);
+    expect(redoResult).toBeNull();
+  });
+
+  it("should enforce phase restrictions for undo/redo", async () => {
+    const { createGameHistory, pushState, canUndo } = await import("./serialization");
+
+    let state = createGame({ playerCount: 2, difficulty: 4 });
+    let history = createGameHistory();
+
+    // Record states
+    history = pushState(history, state, "State 1");
+
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move failed");
+    state = move1.state;
+    history = pushState(history, state, "State 2");
+
+    // In Actions phase - should be able to undo
+    expect(state.phase).toBe(TurnPhase.Actions);
+    expect(canUndo(state, history)).toBe(true);
+
+    // Change to Draw phase
+    const drawPhaseState = { ...state, phase: TurnPhase.Draw, actionsRemaining: 0 };
+
+    // In Draw phase - should NOT be able to undo
+    expect(canUndo(drawPhaseState, history)).toBe(false);
+
+    // In Infect phase - should NOT be able to undo
+    const infectPhaseState = { ...state, phase: TurnPhase.Infect, actionsRemaining: 0 };
+    expect(canUndo(infectPhaseState, history)).toBe(false);
+  });
+
+  it("should respect max history depth", async () => {
+    const { createGameHistory, pushState } = await import("./serialization");
+
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    let history = createGameHistory(5); // Small depth for testing
+
+    // Push 10 states (exceeds max depth of 5)
+    for (let i = 0; i < 10; i++) {
+      const modifiedState = { ...state, turnNumber: i + 1 };
+      history = pushState(history, modifiedState, `State ${i + 1}`);
+    }
+
+    // Should only keep the last 5
+    expect(history.past).toHaveLength(5);
+    expect(history.past[0]?.action).toBe("State 6");
+    expect(history.past[4]?.action).toBe("State 10");
+  });
+});
+
+describe("Integration: Replay Workflow", () => {
+  it("should record a game and replay it step-by-step", async () => {
+    const {
+      createReplayRecording,
+      recordAction,
+      finishReplay,
+      replayStep,
+      replayForward,
+      replayBackward,
+    } = await import("./serialization");
+
+    // Start recording
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    let recording = createReplayRecording(initialState);
+
+    // Play a sequence of actions
+    let state = initialState;
+
+    // Action 1: Move to Chicago
+    recording = recordAction(recording, "Player 1: Drive/Ferry to Chicago");
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move 1 failed");
+    state = move1.state;
+
+    // Action 2: Move back to Atlanta
+    recording = recordAction(recording, "Player 1: Drive/Ferry to Atlanta");
+    const move2 = driveFerry(state, "Atlanta");
+    if (!move2.success) throw new Error("Move 2 failed");
+    state = move2.state;
+
+    // Action 3: Treat disease (if there are cubes)
+    const atlanta = state.board["Atlanta"];
+    if (atlanta && atlanta.blue > 0) {
+      recording = recordAction(recording, "Player 1: Treat Disease in Atlanta");
+      const treat = treatDisease(state, Disease.Blue);
+      if (treat.success) {
+        state = treat.state;
+      }
+    }
+
+    // Finish recording
+    const replay = finishReplay(recording, state);
+
+    // Verify replay metadata
+    expect(replay.metadata.difficulty).toBe(4);
+    expect(replay.metadata.playerRoles).toHaveLength(2);
+    expect(replay.actions.length).toBeGreaterThan(0);
+
+    // Step through replay
+    const step0 = replayStep(replay, 0);
+    expect(step0.players[0]?.location).toBe("Atlanta");
+
+    // Forward navigation
+    let currentStep = 0;
+    const forward1 = replayForward(replay, currentStep);
+    expect(forward1).not.toBeNull();
+    if (forward1) {
+      expect(forward1.step).toBe(1);
+      currentStep = forward1.step;
+    }
+
+    // Backward navigation
+    const backward1 = replayBackward(replay, currentStep);
+    expect(backward1).not.toBeNull();
+    if (backward1) {
+      expect(backward1.step).toBe(0);
+      expect(backward1.state.players[0]?.location).toBe("Atlanta");
+    }
+  });
+
+  it("should export and import a replay", async () => {
+    const { createReplayRecording, recordAction, finishReplay, exportReplay, importReplay } =
+      await import("./serialization");
+
+    // Create and record a game
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    let recording = createReplayRecording(initialState);
+
+    let state = initialState;
+    recording = recordAction(recording, "Action 1");
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move failed");
+    state = move1.state;
+
+    recording = recordAction(recording, "Action 2");
+    const move2 = driveFerry(state, "Atlanta");
+    if (!move2.success) throw new Error("Move failed");
+    state = move2.state;
+
+    const replay = finishReplay(recording, state);
+
+    // Export replay
+    const json = exportReplay(replay);
+    expect(typeof json).toBe("string");
+
+    // Import replay
+    const imported = importReplay(json);
+
+    // Verify imported replay matches original
+    expect(imported.initialState).toEqual(replay.initialState);
+    expect(imported.actions).toHaveLength(replay.actions.length);
+    expect(imported.metadata).toEqual(replay.metadata);
+  });
+
+  it("should handle replay with toggle recording on/off", async () => {
+    const { createReplayRecording, recordAction, setRecordingEnabled, finishReplay } =
+      await import("./serialization");
+
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    let recording = createReplayRecording(initialState);
+    let state = initialState;
+
+    // Record action 1
+    recording = recordAction(recording, "Action 1");
+    const move1 = driveFerry(state, "Chicago");
+    if (!move1.success) throw new Error("Move 1 failed");
+    state = move1.state;
+
+    // Disable recording
+    recording = setRecordingEnabled(recording, false);
+
+    // This action should NOT be recorded
+    recording = recordAction(recording, "Action 2 (not recorded)");
+    const move2 = driveFerry(state, "Atlanta");
+    if (!move2.success) throw new Error("Move 2 failed");
+    state = move2.state;
+
+    // Re-enable recording
+    recording = setRecordingEnabled(recording, true);
+
+    // Record action 3
+    recording = recordAction(recording, "Action 3");
+    const move3 = driveFerry(state, "Chicago");
+    if (!move3.success) throw new Error("Move 3 failed");
+    state = move3.state;
+
+    // Finish replay
+    const replay = finishReplay(recording, state);
+
+    // Should only have 2 actions recorded (1 and 3)
+    expect(replay.actions).toHaveLength(2);
+    expect(replay.actions[0]?.action).toBe("Action 1");
+    expect(replay.actions[1]?.action).toBe("Action 3");
+  });
+
+  it("should replay a complete game scenario with metadata", async () => {
+    const { createReplayRecording, recordAction, finishReplay, replayStep } =
+      await import("./serialization");
+
+    const initialState = createGame({ playerCount: 3, difficulty: 5 });
+    let recording = createReplayRecording(initialState);
+    let state = initialState;
+
+    // Simulate several turns with multiple actions
+    for (let turn = 0; turn < 3; turn++) {
+      // Each player takes some actions
+      for (let action = 0; action < 2; action++) {
+        const currentPlayer = state.players[state.currentPlayerIndex];
+        if (!currentPlayer) continue;
+
+        recording = recordAction(
+          recording,
+          `Turn ${turn + 1}, Player ${state.currentPlayerIndex + 1}: Move`,
+        );
+
+        // Just move back and forth
+        const targetCity = currentPlayer.location === "Atlanta" ? "Chicago" : "Atlanta";
+        const moveResult = driveFerry(state, targetCity);
+        if (moveResult.success) {
+          state = moveResult.state;
+        }
+      }
+
+      // Advance to next player (simplified)
+      state = {
+        ...state,
+        currentPlayerIndex: (state.currentPlayerIndex + 1) % state.config.playerCount,
+        actionsRemaining: 4,
+        turnNumber: state.turnNumber + 1,
+      };
+    }
+
+    // Finish recording
+    const finalState = { ...state, status: GameStatus.Won };
+    const replay = finishReplay(recording, finalState);
+
+    // Verify replay structure
+    expect(replay.actions.length).toBeGreaterThan(0);
+    expect(replay.metadata.playerRoles).toHaveLength(3);
+    expect(replay.metadata.difficulty).toBe(5);
+    expect(replay.metadata.finalOutcome).toBe(GameStatus.Won);
+
+    // Verify we can access any step
+    const initialStep = replayStep(replay, 0);
+    expect(initialStep.turnNumber).toBe(1);
+
+    // Access a middle step
+    if (replay.actions.length > 1) {
+      const middleStep = replayStep(replay, Math.floor(replay.actions.length / 2));
+      expect(middleStep).toBeDefined();
+    }
+  });
+});
