@@ -292,6 +292,56 @@ export class LocalStorageBackend implements StorageBackend {
 }
 
 /**
+ * In-memory storage backend for testing and non-persistent scenarios
+ * Stores game saves in memory, data is lost when the process exits
+ */
+export class InMemoryBackend implements StorageBackend {
+  private readonly storage: Map<string, string> = new Map();
+
+  /**
+   * Saves data to memory
+   * @param key - Unique identifier for the saved data
+   * @param data - The data to save (JSON string)
+   */
+  async save(key: string, data: string): Promise<void> {
+    this.storage.set(key, data);
+  }
+
+  /**
+   * Loads data from memory
+   * @param key - Unique identifier for the data to load
+   * @returns The saved data, or null if not found
+   */
+  async load(key: string): Promise<string | null> {
+    return this.storage.get(key) ?? null;
+  }
+
+  /**
+   * Lists all saved game keys in memory
+   * @returns Array of save keys
+   */
+  async list(): Promise<string[]> {
+    return Array.from(this.storage.keys());
+  }
+
+  /**
+   * Deletes saved data from memory
+   * @param key - Unique identifier for the data to delete
+   */
+  async delete(key: string): Promise<void> {
+    this.storage.delete(key);
+  }
+
+  /**
+   * Clears all saved data from memory
+   * Useful for resetting state between tests
+   */
+  clear(): void {
+    this.storage.clear();
+  }
+}
+
+/**
  * Filesystem-based storage backend for Node.js environments
  * Uses Node.js fs module to persist game saves to disk
  */

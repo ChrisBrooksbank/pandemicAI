@@ -1,6 +1,11 @@
 // Tests for StorageBackend interface and implementations
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FileSystemBackend, LocalStorageBackend, type StorageBackend } from "./serialization";
+import {
+  FileSystemBackend,
+  InMemoryBackend,
+  LocalStorageBackend,
+  type StorageBackend,
+} from "./serialization";
 import { mkdir, readdir, rm } from "fs/promises";
 
 // Mock localStorage for Node.js environment
@@ -110,6 +115,106 @@ describe("StorageBackend interface", () => {
     await backend.delete("game1");
     expect(await backend.load("game1")).toBeNull();
     expect(await backend.list()).toEqual(["game2"]);
+  });
+});
+
+describe("InMemoryBackend", () => {
+  let backend: InMemoryBackend;
+
+  beforeEach(() => {
+    backend = new InMemoryBackend();
+  });
+
+  it("should save and load data", async () => {
+    await backend.save("game1", "test-data-1");
+    const loaded = await backend.load("game1");
+    expect(loaded).toBe("test-data-1");
+  });
+
+  it("should return null for non-existent keys", async () => {
+    const loaded = await backend.load("non-existent");
+    expect(loaded).toBeNull();
+  });
+
+  it("should list all saved games", async () => {
+    await backend.save("game1", "data1");
+    await backend.save("game2", "data2");
+    await backend.save("game3", "data3");
+
+    const keys = await backend.list();
+    expect(keys).toHaveLength(3);
+    expect(keys).toContain("game1");
+    expect(keys).toContain("game2");
+    expect(keys).toContain("game3");
+  });
+
+  it("should delete saved games", async () => {
+    await backend.save("game1", "data1");
+    await backend.save("game2", "data2");
+
+    await backend.delete("game1");
+
+    expect(await backend.load("game1")).toBeNull();
+    expect(await backend.load("game2")).toBe("data2");
+    expect(await backend.list()).toEqual(["game2"]);
+  });
+
+  it("should overwrite existing data on save", async () => {
+    await backend.save("game1", "original-data");
+    await backend.save("game1", "updated-data");
+
+    const loaded = await backend.load("game1");
+    expect(loaded).toBe("updated-data");
+  });
+
+  it("should handle empty list when no games are saved", async () => {
+    const keys = await backend.list();
+    expect(keys).toEqual([]);
+  });
+
+  it("should handle deleting non-existent keys gracefully", async () => {
+    // Should not throw
+    await expect(backend.delete("non-existent")).resolves.toBeUndefined();
+  });
+
+  it("should clear all data", async () => {
+    await backend.save("game1", "data1");
+    await backend.save("game2", "data2");
+    await backend.save("game3", "data3");
+
+    backend.clear();
+
+    await expect(backend.list()).resolves.toEqual([]);
+  });
+
+  it("should isolate data between instances", async () => {
+    const backend1 = new InMemoryBackend();
+    const backend2 = new InMemoryBackend();
+
+    await backend1.save("game1", "data1");
+    await backend2.save("game2", "data2");
+
+    expect(await backend1.load("game1")).toBe("data1");
+    expect(await backend1.load("game2")).toBeNull();
+
+    expect(await backend2.load("game2")).toBe("data2");
+    expect(await backend2.load("game1")).toBeNull();
+  });
+
+  it("should be useful for test scenarios", async () => {
+    // Demonstrate typical test usage pattern
+    const testBackend = new InMemoryBackend();
+
+    // Setup test data
+    await testBackend.save("test-game", '{"some":"data"}');
+
+    // Run test
+    const loaded = await testBackend.load("test-game");
+    expect(loaded).toBe('{"some":"data"}');
+
+    // Clean up between tests
+    testBackend.clear();
+    expect(await testBackend.list()).toEqual([]);
   });
 });
 

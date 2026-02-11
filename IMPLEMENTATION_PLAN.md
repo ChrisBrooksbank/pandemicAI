@@ -164,7 +164,7 @@
 - [x] Define StorageBackend interface (save, load, list, delete)
 - [x] Implement LocalStorageBackend for browser-based storage
 - [x] Implement FileSystemBackend for Node.js CLI/testing scenarios
-- [ ] Implement InMemoryBackend for testing
+- [x] Implement InMemoryBackend for testing
 - [ ] Implement saveGame(), loadGame(), listSaves(), deleteSave() with injectable backend
 - [ ] Implement GameHistory type and pushState(), undo(), redo() functions
 - [ ] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)

@@ -111,6 +111,7 @@ export {
   DeserializationError,
   LocalStorageBackend,
   FileSystemBackend,
+  InMemoryBackend,
   type SerializedGameState,
   type SavePreview,
   type SaveSlot,
