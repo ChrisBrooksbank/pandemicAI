@@ -63,32 +63,40 @@ function App() {
   }
 
   return (
-    <div>
-      <h1>Pandemic Game</h1>
+    <div className="App">
+      <div className="App_gameBoard">
+        <div className="App_statusBar">
+          <StatusBar gameState={gameState} />
+        </div>
 
-      <StatusBar gameState={gameState} />
+        <div className="App_map">
+          <WorldMap
+            gameState={gameState}
+            availableActions={availableActions}
+            selectedAction={state.selectedAction}
+            onCityClick={handleCityClick}
+          />
+        </div>
 
-      <WorldMap
-        gameState={gameState}
-        availableActions={availableActions}
-        selectedAction={state.selectedAction}
-        onCityClick={handleCityClick}
-      />
+        <div className="App_sidebar">
+          <PlayerPanel
+            gameState={gameState}
+            currentPlayerIndex={gameState.currentPlayerIndex}
+            phase={phase}
+            actionsRemaining={actionsRemaining}
+          />
+        </div>
 
-      <PlayerPanel
-        gameState={gameState}
-        currentPlayerIndex={gameState.currentPlayerIndex}
-        phase={phase}
-        actionsRemaining={actionsRemaining}
-      />
-
-      <ActionBar
-        phase={phase}
-        actionsRemaining={actionsRemaining}
-        availableActions={availableActions}
-        selectedAction={state.selectedAction}
-        dispatch={dispatch}
-      />
+        <div className="App_actionBar">
+          <ActionBar
+            phase={phase}
+            actionsRemaining={actionsRemaining}
+            availableActions={availableActions}
+            selectedAction={state.selectedAction}
+            dispatch={dispatch}
+          />
+        </div>
+      </div>
 
       {/* Event Menu - floating button for playing event cards */}
       <EventMenu gameState={gameState} dispatch={dispatch} />

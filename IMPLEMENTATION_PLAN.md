@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 59
+- Build iterations: 60
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -189,7 +189,7 @@
 - [x] Implement action parser utility (parseAction, groupActionsByType, getMovementDestinations)
 - [x] Create all dialogs: DiscardDialog, EpidemicOverlay, ShareKnowledgeDialog, DiscoverCureDialog, ForecastDialog, AirliftDialog, GovernmentGrantDialog, ResilientPopulationDialog, GameOverDialog
 - [x] Add event card menu (playable anytime, any phase)
-- [ ] Add CSS styling with dark theme
+- [x] Add CSS styling with dark theme
 - [ ] Add integration tests for full game playthrough in web UI
 
 ## Completed
