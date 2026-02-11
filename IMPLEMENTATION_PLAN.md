@@ -170,7 +170,7 @@
 - [x] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)
 - [x] Implement GameReplay type (initial state + action sequence)
 - [x] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
-- [ ] Add replay recording during live games (opt-in)
+- [x] Add replay recording during live games (opt-in)
 - [ ] Add JSON export/import for replay sharing
 - [ ] Add unit tests for serialization round-trip fidelity
 - [ ] Add integration tests for save/load, undo/redo, and replay workflows

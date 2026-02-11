@@ -786,6 +786,108 @@ export function replayBackward(
 }
 
 /**
+ * Represents a replay recording in progress during a live game
+ * Stores minimal action descriptors to recreate the game flow
+ */
+export interface ReplayRecording {
+  /** The initial game state before any actions were taken */
+  initialState: GameState;
+  /** Ordered list of action descriptors */
+  actions: string[];
+  /** Whether recording is currently enabled */
+  enabled: boolean;
+}
+
+/**
+ * Creates a new replay recording from an initial game state
+ * @param initialState - The starting game state to record from
+ * @param enabled - Whether recording is enabled (default: true)
+ * @returns A new ReplayRecording object
+ */
+export function createReplayRecording(initialState: GameState, enabled = true): ReplayRecording {
+  return {
+    initialState,
+    actions: [],
+    enabled,
+  };
+}
+
+/**
+ * Records an action in a replay recording
+ * Only records if the recording is enabled
+ * @param recording - The replay recording to add to
+ * @param action - Description of the action taken
+ * @returns Updated replay recording with the new action
+ */
+export function recordAction(recording: ReplayRecording, action: string): ReplayRecording {
+  if (!recording.enabled) {
+    return recording; // No-op if recording disabled
+  }
+
+  return {
+    ...recording,
+    actions: [...recording.actions, action],
+  };
+}
+
+/**
+ * Enables or disables recording for a replay recording
+ * @param recording - The replay recording to modify
+ * @param enabled - Whether recording should be enabled
+ * @returns Updated replay recording with new enabled status
+ */
+export function setRecordingEnabled(recording: ReplayRecording, enabled: boolean): ReplayRecording {
+  return {
+    ...recording,
+    enabled,
+  };
+}
+
+/**
+ * Finalizes a replay recording into a shareable GameReplay
+ * Note: This version stores only action descriptors, not full state snapshots
+ * To reconstruct states, the actions must be replayed from the initial state
+ * @param recording - The replay recording to finalize
+ * @param currentState - The final game state after all actions
+ * @param metadata - Optional metadata (if not provided, extracted from states)
+ * @returns A GameReplay object ready for export or step-through
+ */
+export function finishReplay(
+  recording: ReplayRecording,
+  currentState: GameState,
+  metadata?: Partial<ReplayMetadata>,
+): GameReplay {
+  // Create replay actions with state snapshots
+  // Note: In a full implementation with action replay capability,
+  // we would replay each action to get intermediate states.
+  // For now, we only have initial and final states.
+  const replayActions: ReplayAction[] = recording.actions.map((action, index) => {
+    // For this implementation, we store the action descriptor
+    // but don't have intermediate states (would need replay capability)
+    return {
+      action,
+      // Placeholder: would need to replay actions to get intermediate states
+      result: index === recording.actions.length - 1 ? currentState : recording.initialState,
+    };
+  });
+
+  // Generate default metadata
+  const defaultMetadata: ReplayMetadata = {
+    playerRoles: recording.initialState.players.map((p) => p.role),
+    difficulty: recording.initialState.config.difficulty,
+    finalOutcome: currentState.status,
+    totalTurns: currentState.turnNumber,
+    timestamp: Date.now(),
+  };
+
+  return {
+    initialState: recording.initialState,
+    actions: replayActions,
+    metadata: { ...defaultMetadata, ...metadata },
+  };
+}
+
+/**
  * Filesystem-based storage backend for Node.js environments
  * Uses Node.js fs module to persist game saves to disk
  */

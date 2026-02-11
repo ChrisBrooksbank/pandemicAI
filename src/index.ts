@@ -135,4 +135,9 @@ export {
   replayStep,
   replayForward,
   replayBackward,
+  type ReplayRecording,
+  createReplayRecording,
+  recordAction,
+  setRecordingEnabled,
+  finishReplay,
 } from "./serialization";

@@ -8,6 +8,10 @@ import {
   replayStep,
   replayForward,
   replayBackward,
+  createReplayRecording,
+  recordAction,
+  setRecordingEnabled,
+  finishReplay,
   type ReplayAction,
   type ReplayMetadata,
 } from "./serialization";
@@ -369,6 +373,199 @@ describe("GameReplay", () => {
       const backward = replayBackward(replay, 50);
       expect(backward?.step).toBe(49);
       expect(backward?.state.turnNumber).toBe(49);
+    });
+  });
+
+  describe("ReplayRecording", () => {
+    describe("createReplayRecording", () => {
+      it("should create an empty recording with initial state", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        const recording = createReplayRecording(initialState);
+
+        expect(recording.initialState).toBe(initialState);
+        expect(recording.actions).toHaveLength(0);
+        expect(recording.enabled).toBe(true);
+      });
+
+      it("should respect enabled flag", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        const recording = createReplayRecording(initialState, false);
+
+        expect(recording.enabled).toBe(false);
+      });
+    });
+
+    describe("recordAction", () => {
+      it("should add action to recording when enabled", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState);
+
+        recording = recordAction(recording, "Drive/Ferry to Chicago");
+        expect(recording.actions).toHaveLength(1);
+        expect(recording.actions[0]).toBe("Drive/Ferry to Chicago");
+
+        recording = recordAction(recording, "Treat Disease");
+        expect(recording.actions).toHaveLength(2);
+        expect(recording.actions[1]).toBe("Treat Disease");
+      });
+
+      it("should not add action when recording is disabled", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState, false);
+
+        recording = recordAction(recording, "Drive/Ferry to Chicago");
+        expect(recording.actions).toHaveLength(0);
+      });
+
+      it("should preserve immutability", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        const recording1 = createReplayRecording(initialState);
+        const recording2 = recordAction(recording1, "Action 1");
+
+        expect(recording1.actions).toHaveLength(0);
+        expect(recording2.actions).toHaveLength(1);
+      });
+    });
+
+    describe("setRecordingEnabled", () => {
+      it("should enable recording", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState, false);
+
+        recording = setRecordingEnabled(recording, true);
+        expect(recording.enabled).toBe(true);
+
+        // Now recording should work
+        recording = recordAction(recording, "Test action");
+        expect(recording.actions).toHaveLength(1);
+      });
+
+      it("should disable recording", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState, true);
+
+        recording = setRecordingEnabled(recording, false);
+        expect(recording.enabled).toBe(false);
+
+        // Recording should not work
+        recording = recordAction(recording, "Test action");
+        expect(recording.actions).toHaveLength(0);
+      });
+    });
+
+    describe("finishReplay", () => {
+      it("should convert recording to GameReplay", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState);
+
+        recording = recordAction(recording, "Action 1");
+        recording = recordAction(recording, "Action 2");
+        recording = recordAction(recording, "Action 3");
+
+        const finalState = { ...initialState, turnNumber: 5, status: GameStatus.Won };
+        const replay = finishReplay(recording, finalState);
+
+        expect(replay.initialState).toBe(initialState);
+        expect(replay.actions).toHaveLength(3);
+        expect(replay.actions[0]?.action).toBe("Action 1");
+        expect(replay.actions[1]?.action).toBe("Action 2");
+        expect(replay.actions[2]?.action).toBe("Action 3");
+        expect(replay.metadata.finalOutcome).toBe(GameStatus.Won);
+        expect(replay.metadata.totalTurns).toBe(5);
+      });
+
+      it("should extract metadata from game states", () => {
+        const initialState = createGame({ playerCount: 3, difficulty: 5 });
+        const recording = createReplayRecording(initialState);
+
+        const finalState = {
+          ...initialState,
+          turnNumber: 12,
+          status: GameStatus.Lost,
+        };
+
+        const replay = finishReplay(recording, finalState);
+
+        expect(replay.metadata.difficulty).toBe(5);
+        expect(replay.metadata.playerRoles).toHaveLength(3);
+        expect(replay.metadata.totalTurns).toBe(12);
+        expect(replay.metadata.finalOutcome).toBe(GameStatus.Lost);
+        expect(replay.metadata.timestamp).toBeGreaterThan(0);
+      });
+
+      it("should accept custom metadata", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        const recording = createReplayRecording(initialState);
+        const finalState = { ...initialState };
+
+        const customMetadata = {
+          playerNames: ["Alice", "Bob"],
+        };
+
+        const replay = finishReplay(recording, finalState, customMetadata);
+
+        expect(replay.metadata.playerNames).toEqual(["Alice", "Bob"]);
+        expect(replay.metadata.difficulty).toBe(4); // Default still filled in
+      });
+
+      it("should handle empty recording", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        const recording = createReplayRecording(initialState);
+
+        const replay = finishReplay(recording, initialState);
+
+        expect(replay.actions).toHaveLength(0);
+        expect(replay.metadata.totalTurns).toBe(initialState.turnNumber);
+      });
+    });
+
+    describe("Live game recording integration", () => {
+      it("should record a sequence of game actions", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState);
+
+        // Simulate playing a game and recording actions
+        recording = recordAction(recording, "Player 1: Drive/Ferry to Chicago");
+
+        const move1 = driveFerry(initialState, "Chicago");
+        if (!move1.success) throw new Error("Move failed");
+
+        recording = recordAction(recording, "Player 1: Treat Disease in Chicago");
+        recording = recordAction(recording, "Player 1: Build Research Station");
+        recording = recordAction(recording, "Player 1: Draw Cards");
+
+        expect(recording.actions).toHaveLength(4);
+
+        // Finish the recording
+        const finalState = { ...move1.state, turnNumber: 3, status: GameStatus.Won };
+        const replay = finishReplay(recording, finalState);
+
+        // Verify replay structure
+        expect(replay.actions).toHaveLength(4);
+        expect(replay.actions[0]?.action).toBe("Player 1: Drive/Ferry to Chicago");
+        expect(replay.metadata.totalTurns).toBe(3);
+        expect(replay.metadata.finalOutcome).toBe(GameStatus.Won);
+      });
+
+      it("should support toggling recording on and off", () => {
+        const initialState = createGame({ playerCount: 2, difficulty: 4 });
+        let recording = createReplayRecording(initialState);
+
+        // Record some actions
+        recording = recordAction(recording, "Action 1");
+        recording = recordAction(recording, "Action 2");
+
+        // Disable recording
+        recording = setRecordingEnabled(recording, false);
+        recording = recordAction(recording, "Action 3"); // Should not be recorded
+
+        // Re-enable recording
+        recording = setRecordingEnabled(recording, true);
+        recording = recordAction(recording, "Action 4");
+
+        expect(recording.actions).toHaveLength(3);
+        expect(recording.actions).toEqual(["Action 1", "Action 2", "Action 4"]);
+      });
     });
   });
 });
