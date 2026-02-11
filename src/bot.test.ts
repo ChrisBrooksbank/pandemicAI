@@ -2,7 +2,14 @@
 
 import { describe, it, expect } from "vitest";
 import type { Bot } from "./bot";
-import { RandomBot, PriorityBot, HeuristicBot, DEFAULT_HEURISTIC_WEIGHTS, runBotGame } from "./bot";
+import {
+  RandomBot,
+  PriorityBot,
+  HeuristicBot,
+  DEFAULT_HEURISTIC_WEIGHTS,
+  runBotGame,
+  runBotGames,
+} from "./bot";
 import { createGame } from "./game";
 import { getAvailableActions } from "./game";
 import type { GameState, InfectionCard, CityCard, EventCard } from "./types";
@@ -1437,6 +1444,158 @@ describe("runBotGame", () => {
       console.warn(
         "PriorityBot did not win in 10 attempts - this may be due to randomness or bot strategy issues",
       );
+    }
+  });
+});
+
+describe("runBotGames", () => {
+  it("should run multiple games and return aggregate results", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 10;
+
+    const results = runBotGames(config, bots, count);
+
+    expect(results.gamesPlayed).toBe(count);
+    expect(results.results).toHaveLength(count);
+    expect(results.winRate).toBeGreaterThanOrEqual(0);
+    expect(results.winRate).toBeLessThanOrEqual(1);
+    expect(results.averageTurns).toBeGreaterThan(0);
+    expect(results.averageOutbreaks).toBeGreaterThanOrEqual(0);
+    expect(results.gamesWon).toBeGreaterThanOrEqual(0);
+    expect(results.gamesWon).toBeLessThanOrEqual(count);
+  });
+
+  it("should calculate win rate correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 20;
+
+    const results = runBotGames(config, bots, count);
+
+    const expectedWinRate = results.gamesWon / results.gamesPlayed;
+    expect(results.winRate).toBeCloseTo(expectedWinRate, 5);
+  });
+
+  it("should calculate average turns correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 10;
+
+    const results = runBotGames(config, bots, count);
+
+    const totalTurns = results.results.reduce((sum, result) => sum + result.turnCount, 0);
+    const expectedAverage = totalTurns / count;
+
+    expect(results.averageTurns).toBeCloseTo(expectedAverage, 5);
+  });
+
+  it("should calculate average outbreaks correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 10;
+
+    const results = runBotGames(config, bots, count);
+
+    const totalOutbreaks = results.results.reduce((sum, result) => sum + result.outbreaks, 0);
+    const expectedAverage = totalOutbreaks / count;
+
+    expect(results.averageOutbreaks).toBeCloseTo(expectedAverage, 5);
+  });
+
+  it("should include cure rates for all diseases", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 10;
+
+    const results = runBotGames(config, bots, count);
+
+    expect(results.cureRates).toBeDefined();
+    expect(results.cureRates.blue).toBeGreaterThanOrEqual(0);
+    expect(results.cureRates.blue).toBeLessThanOrEqual(1);
+    expect(results.cureRates.yellow).toBeGreaterThanOrEqual(0);
+    expect(results.cureRates.yellow).toBeLessThanOrEqual(1);
+    expect(results.cureRates.black).toBeGreaterThanOrEqual(0);
+    expect(results.cureRates.black).toBeLessThanOrEqual(1);
+    expect(results.cureRates.red).toBeGreaterThanOrEqual(0);
+    expect(results.cureRates.red).toBeLessThanOrEqual(1);
+  });
+
+  it("should call progress callback for each game", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 5;
+
+    const progressCalls: Array<{ completed: number; total: number }> = [];
+    const onProgress = (completed: number, total: number) => {
+      progressCalls.push({ completed, total });
+    };
+
+    runBotGames(config, bots, count, onProgress);
+
+    expect(progressCalls).toHaveLength(count);
+    expect(progressCalls[0]).toEqual({ completed: 1, total: count });
+    expect(progressCalls[count - 1]).toEqual({ completed: count, total: count });
+  });
+
+  it("should throw error if count is not positive", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+
+    expect(() => runBotGames(config, bots, 0)).toThrow("Count must be positive");
+    expect(() => runBotGames(config, bots, -5)).toThrow("Count must be positive");
+  });
+
+  it("should throw error if bot count does not match player count", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot()]; // Only 1 bot for 2 players
+
+    expect(() => runBotGames(config, bots, 10)).toThrow(
+      "Number of bots (1) must match player count (2)",
+    );
+  });
+
+  it("should work with different bot types", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new PriorityBot(), new HeuristicBot()];
+    const count = 5;
+
+    const results = runBotGames(config, bots, count);
+
+    expect(results.gamesPlayed).toBe(count);
+    expect(results.results).toHaveLength(count);
+  });
+
+  it("should handle large game counts", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 50;
+
+    const results = runBotGames(config, bots, count);
+
+    expect(results.gamesPlayed).toBe(count);
+    expect(results.results).toHaveLength(count);
+    expect(results.winRate).toBeGreaterThanOrEqual(0);
+    expect(results.winRate).toBeLessThanOrEqual(1);
+  });
+
+  it("should store all individual game results", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+    const count = 10;
+
+    const results = runBotGames(config, bots, count);
+
+    expect(results.results).toHaveLength(count);
+
+    for (const result of results.results) {
+      expect(result.won).toBeDefined();
+      expect(typeof result.won).toBe("boolean");
+      expect(result.turnCount).toBeGreaterThanOrEqual(0);
+      expect(result.diseasesCured).toBeGreaterThanOrEqual(0);
+      expect(result.diseasesCured).toBeLessThanOrEqual(4);
+      expect(result.outbreaks).toBeGreaterThanOrEqual(0);
+      expect(result.status).toMatch(/^(won|lost)$/);
     }
   });
 });

@@ -99,5 +99,7 @@ export {
   type HeuristicWeights,
   DEFAULT_HEURISTIC_WEIGHTS,
   runBotGame,
+  runBotGames,
   type GameResult,
+  type AggregateResults,
 } from "./bot";

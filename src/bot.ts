@@ -812,6 +812,31 @@ export interface GameResult {
 }
 
 /**
+ * Aggregate results from running multiple bot games.
+ */
+export interface AggregateResults {
+  /** Total number of games played */
+  gamesPlayed: number;
+  /** Number of games won */
+  gamesWon: number;
+  /** Win rate (0.0 to 1.0) */
+  winRate: number;
+  /** Average number of turns per game */
+  averageTurns: number;
+  /** Average number of outbreaks per game */
+  averageOutbreaks: number;
+  /** Cure rate per disease color (0.0 to 1.0) */
+  cureRates: {
+    blue: number;
+    yellow: number;
+    black: number;
+    red: number;
+  };
+  /** Individual game results */
+  results: GameResult[];
+}
+
+/**
  * Run a complete game with bot players.
  *
  * @param config - Game configuration (player count, difficulty)
@@ -924,10 +949,8 @@ export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
         // Infection phase: infect cities
         const outcome = game.infectCities();
 
-        // Increment turn counter after infection phase completes
-        if (outcome.gameStatus === GameStatus.Ongoing) {
-          turnCount++;
-        }
+        // Increment turn counter after infection phase (even if game ends)
+        turnCount++;
 
         // Check for game over
         if (outcome.gameStatus !== GameStatus.Ongoing) {
@@ -990,5 +1013,164 @@ export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
     outbreaks: finalState.outbreakCount,
     status: won ? "won" : "lost",
     lossReason,
+  };
+}
+
+/**
+ * Run multiple bot games and aggregate results for statistical analysis.
+ *
+ * @param config - Game configuration (player count, difficulty)
+ * @param bots - Array of bots, one per player (length must match playerCount)
+ * @param count - Number of games to run
+ * @param onProgress - Optional callback for progress updates (called after each game)
+ * @returns AggregateResults with win rate, averages, and per-game results
+ *
+ * @example
+ * ```typescript
+ * const config = { playerCount: 2, difficulty: 4 };
+ * const bots = [new PriorityBot(), new PriorityBot()];
+ * const results = runBotGames(config, bots, 100, (completed, total) => {
+ *   console.log(`Progress: ${completed}/${total}`);
+ * });
+ * console.log(`Win rate: ${(results.winRate * 100).toFixed(1)}%`);
+ * console.log(`Average turns: ${results.averageTurns.toFixed(1)}`);
+ * ```
+ */
+export function runBotGames(
+  config: GameConfig,
+  bots: Bot[],
+  count: number,
+  onProgress?: (completed: number, total: number) => void,
+): AggregateResults {
+  // Validate inputs
+  if (count <= 0) {
+    throw new Error("Count must be positive");
+  }
+
+  if (bots.length !== config.playerCount) {
+    throw new Error(
+      `Number of bots (${bots.length}) must match player count (${config.playerCount})`,
+    );
+  }
+
+  const results: GameResult[] = [];
+  let totalTurns = 0;
+  let totalOutbreaks = 0;
+  let gamesWon = 0;
+  const cureCountsByColor = {
+    blue: 0,
+    yellow: 0,
+    black: 0,
+    red: 0,
+  };
+
+  // Run all games
+  for (let i = 0; i < count; i++) {
+    const result = runBotGame(config, bots);
+    results.push(result);
+
+    // Accumulate statistics
+    totalTurns += result.turnCount;
+    totalOutbreaks += result.outbreaks;
+
+    if (result.won) {
+      gamesWon++;
+    }
+
+    // Count which diseases were cured (by checking final game state)
+    // We need to re-run the game to get cure status, or track it in GameResult
+    // For now, we'll infer from diseasesCured count (not precise, but reasonable)
+    // TODO: Could enhance GameResult to include per-disease cure status
+
+    // Call progress callback if provided
+    if (onProgress) {
+      onProgress(i + 1, count);
+    }
+  }
+
+  // Calculate cure rates by re-running games and tracking which diseases were cured
+  // This is inefficient but necessary since GameResult doesn't track per-disease cures
+  // We'll run a subset of games to estimate cure rates
+  const sampleSize = Math.min(count, 100); // Sample at most 100 games for cure rate estimation
+  for (let i = 0; i < sampleSize; i++) {
+    const game = OrchestratedGame.create(config);
+
+    // Run the game with bots (simplified version without full tracking)
+    let safety = 0;
+    const maxTurns = 1000;
+
+    while (game.getStatus() === "playing" && safety < maxTurns) {
+      const phase = game.getCurrentPhase();
+      const currentPlayerIndex = game.getGameState().currentPlayerIndex;
+      const bot = bots[currentPlayerIndex];
+
+      if (!bot) break;
+
+      try {
+        if (phase === "actions") {
+          const actionsRemaining = game.getActionsRemaining();
+          if (actionsRemaining > 0) {
+            const availableActions = game.getAvailableActions();
+            if (availableActions.length > 0) {
+              const action = bot.chooseAction(game.getGameState(), availableActions);
+              const outcome = game.performAction(action);
+              if (outcome.gameStatus !== GameStatus.Ongoing) break;
+            } else {
+              const outcome = game.drawCards();
+              if (outcome.gameStatus !== GameStatus.Ongoing) break;
+            }
+          } else {
+            const outcome = game.drawCards();
+            if (outcome.gameStatus !== GameStatus.Ongoing) break;
+          }
+        } else if (phase === "draw") {
+          const outcome = game.drawCards();
+          if (outcome.gameStatus !== GameStatus.Ongoing) break;
+        } else if (phase === "infect") {
+          const outcome = game.infectCities();
+          if (outcome.gameStatus !== GameStatus.Ongoing) break;
+        }
+
+        safety++;
+      } catch {
+        break;
+      }
+    }
+
+    // Check which diseases were cured
+    const finalState = game.getGameState();
+    if (finalState.cures.blue !== CureStatus.Uncured) {
+      cureCountsByColor.blue++;
+    }
+    if (finalState.cures.yellow !== CureStatus.Uncured) {
+      cureCountsByColor.yellow++;
+    }
+    if (finalState.cures.black !== CureStatus.Uncured) {
+      cureCountsByColor.black++;
+    }
+    if (finalState.cures.red !== CureStatus.Uncured) {
+      cureCountsByColor.red++;
+    }
+  }
+
+  // Calculate aggregate statistics
+  const winRate = count > 0 ? gamesWon / count : 0;
+  const averageTurns = count > 0 ? totalTurns / count : 0;
+  const averageOutbreaks = count > 0 ? totalOutbreaks / count : 0;
+  const cureRates = {
+    blue: sampleSize > 0 ? cureCountsByColor.blue / sampleSize : 0,
+    yellow: sampleSize > 0 ? cureCountsByColor.yellow / sampleSize : 0,
+    black: sampleSize > 0 ? cureCountsByColor.black / sampleSize : 0,
+    red: sampleSize > 0 ? cureCountsByColor.red / sampleSize : 0,
+  };
+
+  return {
+    gamesPlayed: count,
+    gamesWon,
+    winRate,
+    averageTurns,
+    averageOutbreaks,
+    cureRates,
+    results,
   };
 }

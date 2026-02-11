@@ -150,7 +150,7 @@
 - [x] Implement PriorityBot with rule-based strategy (treat 3-cube cities, discover cures, move to threats)
 - [x] Implement HeuristicBot with scored actions (disease threat, cure progress, station coverage, etc.)
 - [x] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
-- [ ] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
+- [x] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
 - [ ] Add BotPlayerConfig for mixed human/bot games
 - [ ] Add BotDecision diagnostics with score breakdowns for heuristic bot
 - [ ] Add unit tests for all bot strategies
