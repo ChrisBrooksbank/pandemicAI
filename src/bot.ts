@@ -970,6 +970,7 @@ export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
 
   let turnCount = 0;
   const maxTurns = 1000; // Safety limit to prevent infinite loops
+  let lastPhase: "actions" | "draw" | "infect" = "infect"; // Track previous phase to detect new turns
 
   // Main game loop
   while (game.getStatus() === "playing" && turnCount < maxTurns) {
@@ -980,6 +981,12 @@ export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
     if (!bot) {
       throw new Error(`No bot found for player ${currentPlayerIndex}`);
     }
+
+    // Increment turn counter when we transition from infect phase to actions phase (start of new turn)
+    if (phase === "actions" && lastPhase === "infect") {
+      turnCount++;
+    }
+    lastPhase = phase;
 
     try {
       if (phase === "actions") {
@@ -1054,9 +1061,6 @@ export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
       } else if (phase === "infect") {
         // Infection phase: infect cities
         const outcome = game.infectCities();
-
-        // Increment turn counter after infection phase (even if game ends)
-        turnCount++;
 
         // Check for game over
         if (outcome.gameStatus !== GameStatus.Ongoing) {
