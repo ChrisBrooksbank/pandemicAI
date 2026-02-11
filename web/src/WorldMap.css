@@ -1,0 +1,24 @@
+.WorldMap {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #0a1929;
+}
+
+.WorldMap_city {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.WorldMap_city:hover {
+  transform: scale(1.15);
+}
+
+.WorldMap_city:hover circle {
+  stroke-width: 3;
+}
+
+.WorldMap_cityLabel {
+  pointer-events: none;
+  user-select: none;
+}

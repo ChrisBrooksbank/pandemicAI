@@ -1,6 +1,7 @@
 import { useReducer } from 'react'
 import { appReducer, initialState } from './state'
 import { SetupScreen } from './SetupScreen'
+import { WorldMap } from './WorldMap'
 import './App.css'
 
 function App() {
@@ -24,6 +25,9 @@ function App() {
   return (
     <div>
       <h1>Pandemic Game</h1>
+
+      <WorldMap />
+
       <div>
         <h2>Current Turn</h2>
         <p>Player: {currentPlayer.role}</p>
