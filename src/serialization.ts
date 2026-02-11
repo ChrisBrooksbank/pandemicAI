@@ -46,6 +46,38 @@ export class DeserializationError extends Error {
 }
 
 /**
+ * Summary information for a saved game, displayed in save/load UI
+ */
+export interface SavePreview {
+  /** Number of diseases that have been cured (0-4) */
+  diseasesCured: number;
+  /** Number of outbreaks that have occurred (0-8) */
+  outbreakCount: number;
+  /** Role of the current player */
+  currentPlayerRole: string;
+}
+
+/**
+ * Represents a saved game slot with metadata and preview information
+ */
+export interface SaveSlot {
+  /** Unique identifier for this save slot */
+  id: string;
+  /** User-provided name for the saved game */
+  name: string;
+  /** Timestamp when the game was saved (milliseconds since epoch) */
+  timestamp: number;
+  /** Current turn number in the game */
+  turnNumber: number;
+  /** Number of players in this game (2-4) */
+  playerCount: number;
+  /** Difficulty level (number of epidemic cards: 4-6) */
+  difficulty: number;
+  /** Preview information for display in save/load UI */
+  preview: SavePreview;
+}
+
+/**
  * Deserializes a JSON string back to a game state
  * @param json - The JSON string to deserialize
  * @returns The reconstructed game state

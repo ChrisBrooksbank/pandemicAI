@@ -110,4 +110,6 @@ export {
   deserializeGame,
   DeserializationError,
   type SerializedGameState,
+  type SavePreview,
+  type SaveSlot,
 } from "./serialization";

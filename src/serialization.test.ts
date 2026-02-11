@@ -1,7 +1,13 @@
 // Tests for serialization and deserialization functionality
 
 import { describe, it, expect } from "vitest";
-import { serializeGame, deserializeGame, DeserializationError } from "./serialization";
+import {
+  serializeGame,
+  deserializeGame,
+  DeserializationError,
+  SavePreview,
+  SaveSlot,
+} from "./serialization";
 import { createGame } from "./game";
 import { GameState, Disease, Role } from "./types";
 
@@ -262,5 +268,175 @@ describe("round-trip fidelity", () => {
       type: "event",
       event: "airlift",
     });
+  });
+});
+
+describe("SavePreview", () => {
+  it("should have correct structure for save preview", () => {
+    const preview: SavePreview = {
+      diseasesCured: 2,
+      outbreakCount: 3,
+      currentPlayerRole: "medic",
+    };
+
+    expect(preview.diseasesCured).toBe(2);
+    expect(preview.outbreakCount).toBe(3);
+    expect(preview.currentPlayerRole).toBe("medic");
+  });
+
+  it("should allow all valid disease cure counts (0-4)", () => {
+    const preview0: SavePreview = {
+      diseasesCured: 0,
+      outbreakCount: 0,
+      currentPlayerRole: "scientist",
+    };
+    const preview4: SavePreview = {
+      diseasesCured: 4,
+      outbreakCount: 0,
+      currentPlayerRole: "scientist",
+    };
+
+    expect(preview0.diseasesCured).toBe(0);
+    expect(preview4.diseasesCured).toBe(4);
+  });
+
+  it("should allow all valid outbreak counts (0-8)", () => {
+    const preview0: SavePreview = {
+      diseasesCured: 0,
+      outbreakCount: 0,
+      currentPlayerRole: "researcher",
+    };
+    const preview8: SavePreview = {
+      diseasesCured: 0,
+      outbreakCount: 8,
+      currentPlayerRole: "researcher",
+    };
+
+    expect(preview0.outbreakCount).toBe(0);
+    expect(preview8.outbreakCount).toBe(8);
+  });
+});
+
+describe("SaveSlot", () => {
+  it("should have correct structure for save slot", () => {
+    const slot: SaveSlot = {
+      id: "save-123",
+      name: "My Game",
+      timestamp: Date.now(),
+      turnNumber: 5,
+      playerCount: 3,
+      difficulty: 5,
+      preview: {
+        diseasesCured: 1,
+        outbreakCount: 2,
+        currentPlayerRole: "operations_expert",
+      },
+    };
+
+    expect(slot.id).toBe("save-123");
+    expect(slot.name).toBe("My Game");
+    expect(typeof slot.timestamp).toBe("number");
+    expect(slot.turnNumber).toBe(5);
+    expect(slot.playerCount).toBe(3);
+    expect(slot.difficulty).toBe(5);
+    expect(slot.preview.diseasesCured).toBe(1);
+    expect(slot.preview.outbreakCount).toBe(2);
+    expect(slot.preview.currentPlayerRole).toBe("operations_expert");
+  });
+
+  it("should support all valid player counts (2-4)", () => {
+    const slot2: SaveSlot = {
+      id: "save-1",
+      name: "2 Players",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "medic" },
+    };
+
+    const slot3: SaveSlot = {
+      id: "save-2",
+      name: "3 Players",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 3,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "medic" },
+    };
+
+    const slot4: SaveSlot = {
+      id: "save-3",
+      name: "4 Players",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 4,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "medic" },
+    };
+
+    expect(slot2.playerCount).toBe(2);
+    expect(slot3.playerCount).toBe(3);
+    expect(slot4.playerCount).toBe(4);
+  });
+
+  it("should support all valid difficulty levels (4-6)", () => {
+    const easy: SaveSlot = {
+      id: "save-easy",
+      name: "Easy Game",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "scientist" },
+    };
+
+    const medium: SaveSlot = {
+      id: "save-medium",
+      name: "Medium Game",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 5,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "scientist" },
+    };
+
+    const hard: SaveSlot = {
+      id: "save-hard",
+      name: "Hard Game",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 6,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "scientist" },
+    };
+
+    expect(easy.difficulty).toBe(4);
+    expect(medium.difficulty).toBe(5);
+    expect(hard.difficulty).toBe(6);
+  });
+
+  it("should support unique IDs for different save slots", () => {
+    const slot1: SaveSlot = {
+      id: "unique-id-1",
+      name: "Game 1",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "dispatcher" },
+    };
+
+    const slot2: SaveSlot = {
+      id: "unique-id-2",
+      name: "Game 2",
+      timestamp: Date.now(),
+      turnNumber: 1,
+      playerCount: 2,
+      difficulty: 4,
+      preview: { diseasesCured: 0, outbreakCount: 0, currentPlayerRole: "dispatcher" },
+    };
+
+    expect(slot1.id).not.toBe(slot2.id);
   });
 });
