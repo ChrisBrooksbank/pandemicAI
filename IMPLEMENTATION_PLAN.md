@@ -158,8 +158,8 @@
 
 ### Phase 18: Serialization & Persistence (Spec: serialization-persistence.md)
 
-- [ ] Implement serializeGame() and deserializeGame() with schema versioning
-- [ ] Add schema validation on deserialization with clear error messages
+- [x] Implement serializeGame() and deserializeGame() with schema versioning
+- [x] Add schema validation on deserialization with clear error messages
 - [ ] Implement SaveSlot type and SavePreview for save/load UI
 - [ ] Define StorageBackend interface (save, load, list, delete)
 - [ ] Implement LocalStorageBackend for browser-based storage

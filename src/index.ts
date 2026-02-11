@@ -105,3 +105,9 @@ export {
   type GameResult,
   type AggregateResults,
 } from "./bot";
+export {
+  serializeGame,
+  deserializeGame,
+  DeserializationError,
+  type SerializedGameState,
+} from "./serialization";
