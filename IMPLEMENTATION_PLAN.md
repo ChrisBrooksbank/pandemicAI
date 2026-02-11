@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 62
+- Build iterations: 63
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -269,3 +269,7 @@
     - Test "should consider infection deck danger for move actions" was failing because it used incorrect property name `state.infectionDiscardPile`
     - Fixed to use correct property name `state.infectionDiscard` (as defined in GameState type)
     - All 1080 tests now pass reliably!
+  - **Iteration 63: FIXED orchestrator event card test flakiness**:
+    - Test "rejects event card player does not have" was flaky because it relied on random card deals from `createTestGameWithSetup()`
+    - Fixed by explicitly clearing player 0's hand and storedEventCard to ensure they don't have any event cards
+    - All 1080 tests continue to pass reliably!

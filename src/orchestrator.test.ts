@@ -2967,6 +2967,16 @@ describe("Integration Tests - Complete Game Flows", () => {
 
     it("rejects event card player does not have", () => {
       const game = createTestGameWithSetup(2, 4);
+      const state = game.getGameState() as GameState;
+
+      // Clear player 0's hand to ensure they don't have any event cards
+      const clearedState: GameState = {
+        ...state,
+        players: state.players.map((p, i) =>
+          i === 0 ? { ...p, hand: [], storedEventCard: undefined } : p,
+        ),
+      };
+      (game as unknown as { gameState: GameState }).gameState = clearedState;
 
       // Try to play Airlift without having it
       expect(() =>
