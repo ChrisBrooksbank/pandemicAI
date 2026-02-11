@@ -1,0 +1,139 @@
+/* ActionBar Component Styles */
+
+.ActionBar_container {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.ActionBar_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #333;
+}
+
+.ActionBar_header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+.ActionBar_counter {
+  font-size: 1rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.ActionBar_groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ActionBar_group {
+  background-color: #2a2a2a;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.ActionBar_groupTitle {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #aaa;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ActionBar_groupButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ActionBar_button {
+  background-color: #3a3a3a;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ActionBar_button:hover {
+  background-color: #4a4a4a;
+  border-color: #666;
+}
+
+.ActionBar_button:active {
+  transform: translateY(1px);
+}
+
+.ActionBar_button--selected {
+  background-color: #0066cc;
+  border-color: #0088ff;
+}
+
+.ActionBar_button--selected:hover {
+  background-color: #0077dd;
+  border-color: #0099ff;
+}
+
+.ActionBar_button--primary {
+  background-color: #0066cc;
+  border-color: #0088ff;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ActionBar_button--primary:hover {
+  background-color: #0077dd;
+  border-color: #0099ff;
+}
+
+.ActionBar_button--danger {
+  background-color: #cc3300;
+  border-color: #ff4400;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.ActionBar_button--danger:hover {
+  background-color: #dd4400;
+  border-color: #ff5500;
+}
+
+.ActionBar_button--end {
+  background-color: #555;
+  border-color: #777;
+  padding: 0.5rem 1.5rem;
+  font-weight: 500;
+}
+
+.ActionBar_button--end:hover {
+  background-color: #666;
+  border-color: #888;
+}
+
+.ActionBar_phaseAction {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.ActionBar_endPhase {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: center;
+}

@@ -4,6 +4,7 @@ import { SetupScreen } from './SetupScreen'
 import { WorldMap } from './WorldMap'
 import { StatusBar } from './StatusBar'
 import { PlayerPanel } from './PlayerPanel'
+import { ActionBar } from './ActionBar'
 import './App.css'
 
 function App() {
@@ -71,20 +72,13 @@ function App() {
         actionsRemaining={actionsRemaining}
       />
 
-      <div>
-        <h2>Actions</h2>
-        {phase === 'actions' && (
-          <button onClick={() => dispatch({ type: 'PERFORM_ACTION', action: 'pass' })}>
-            End Actions
-          </button>
-        )}
-        {phase === 'draw' && (
-          <button onClick={() => dispatch({ type: 'DRAW_CARDS' })}>Draw 2 Cards</button>
-        )}
-        {phase === 'infect' && (
-          <button onClick={() => dispatch({ type: 'INFECT_CITIES' })}>Infect Cities</button>
-        )}
-      </div>
+      <ActionBar
+        phase={phase}
+        actionsRemaining={actionsRemaining}
+        availableActions={availableActions}
+        selectedAction={state.selectedAction}
+        dispatch={dispatch}
+      />
 
       {state.dialog.type === 'epidemic' && (
         <div style={{ border: '2px solid red', padding: '1rem', margin: '1rem' }}>
