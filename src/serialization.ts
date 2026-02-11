@@ -643,6 +643,149 @@ export function canRedo(state: GameState, history: GameHistory): boolean {
 }
 
 /**
+ * Represents a single action in a game replay
+ */
+export interface ReplayAction {
+  /** Description of the action taken */
+  action: string;
+  /** The resulting game state after the action */
+  result: GameState;
+}
+
+/**
+ * Metadata about a completed game replay
+ */
+export interface ReplayMetadata {
+  /** Names of players in the game */
+  playerNames?: string[];
+  /** Roles assigned to each player */
+  playerRoles: string[];
+  /** Difficulty level (number of epidemic cards) */
+  difficulty: number;
+  /** Final game outcome (won/lost/ongoing) */
+  finalOutcome: string;
+  /** Total number of turns played */
+  totalTurns: number;
+  /** Timestamp when the replay was created */
+  timestamp: number;
+}
+
+/**
+ * Represents a complete game replay with initial state and action sequence
+ * Can be used to step through a game move-by-move or export/import for sharing
+ */
+export interface GameReplay {
+  /** The initial game state before any actions were taken */
+  initialState: GameState;
+  /** Ordered list of actions and their resulting states */
+  actions: ReplayAction[];
+  /** Metadata about the game (player info, difficulty, outcome) */
+  metadata: ReplayMetadata;
+}
+
+/**
+ * Creates a game replay from an initial state and sequence of actions
+ * @param initialState - The starting game state
+ * @param actions - Array of actions and their results
+ * @param metadata - Optional metadata (if not provided, extracted from states)
+ * @returns A GameReplay object
+ */
+export function createReplay(
+  initialState: GameState,
+  actions: Array<{ action: string; result: GameState }>,
+  metadata?: ReplayMetadata,
+): GameReplay {
+  // If metadata not provided, extract it from the states
+  const finalState =
+    actions.length > 0 ? (actions[actions.length - 1]?.result ?? initialState) : initialState;
+
+  const defaultMetadata: ReplayMetadata = {
+    playerRoles: initialState.players.map((p) => p.role),
+    difficulty: initialState.config.difficulty,
+    finalOutcome: finalState?.status ?? initialState.status,
+    totalTurns: finalState?.turnNumber ?? initialState.turnNumber,
+    timestamp: Date.now(),
+  };
+
+  return {
+    initialState,
+    actions,
+    metadata: metadata ?? defaultMetadata,
+  };
+}
+
+/**
+ * Gets the game state at a specific step in the replay
+ * @param replay - The game replay
+ * @param stepIndex - The step number (0 = initial state, 1 = after first action, etc.)
+ * @returns The game state at the specified step
+ * @throws {Error} If stepIndex is out of bounds
+ */
+export function replayStep(replay: GameReplay, stepIndex: number): GameState {
+  // Step 0 is the initial state
+  if (stepIndex === 0) {
+    return replay.initialState;
+  }
+
+  // Validate step index
+  if (stepIndex < 0 || stepIndex > replay.actions.length) {
+    throw new Error(
+      `Step index ${stepIndex} is out of bounds (valid range: 0-${replay.actions.length})`,
+    );
+  }
+
+  // Return the result state from the corresponding action
+  const action = replay.actions[stepIndex - 1];
+  if (action === undefined) {
+    throw new Error(`No action found at step ${stepIndex}`);
+  }
+
+  return action.result;
+}
+
+/**
+ * Advances the replay forward by one step
+ * @param replay - The game replay
+ * @param currentStep - Current step number (0-based)
+ * @returns Object with the new state and step number, or null if already at the end
+ */
+export function replayForward(
+  replay: GameReplay,
+  currentStep: number,
+): { state: GameState; step: number } | null {
+  // Check if we can move forward
+  if (currentStep >= replay.actions.length) {
+    return null; // Already at the end
+  }
+
+  const newStep = currentStep + 1;
+  const state = replayStep(replay, newStep);
+
+  return { state, step: newStep };
+}
+
+/**
+ * Moves the replay backward by one step
+ * @param replay - The game replay
+ * @param currentStep - Current step number (0-based)
+ * @returns Object with the new state and step number, or null if already at the beginning
+ */
+export function replayBackward(
+  replay: GameReplay,
+  currentStep: number,
+): { state: GameState; step: number } | null {
+  // Check if we can move backward
+  if (currentStep <= 0) {
+    return null; // Already at the beginning
+  }
+
+  const newStep = currentStep - 1;
+  const state = replayStep(replay, newStep);
+
+  return { state, step: newStep };
+}
+
+/**
  * Filesystem-based storage backend for Node.js environments
  * Uses Node.js fs module to persist game saves to disk
  */

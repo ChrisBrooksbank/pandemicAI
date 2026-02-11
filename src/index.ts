@@ -128,4 +128,11 @@ export {
   redo,
   canUndo,
   canRedo,
+  type GameReplay,
+  type ReplayAction,
+  type ReplayMetadata,
+  createReplay,
+  replayStep,
+  replayForward,
+  replayBackward,
 } from "./serialization";

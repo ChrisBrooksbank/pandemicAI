@@ -168,8 +168,8 @@
 - [x] Implement saveGame(), loadGame(), listSaves(), deleteSave() with injectable backend
 - [x] Implement GameHistory type and pushState(), undo(), redo() functions
 - [x] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)
-- [ ] Implement GameReplay type (initial state + action sequence)
-- [ ] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
+- [x] Implement GameReplay type (initial state + action sequence)
+- [x] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
 - [ ] Add replay recording during live games (opt-in)
 - [ ] Add JSON export/import for replay sharing
 - [ ] Add unit tests for serialization round-trip fidelity
