@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { EventMenu } from './EventMenu'
 import type { GameState, Player, EventType } from '@engine/types'
-import type { GameAction } from './state'
 
 // Helper to create a minimal game state for testing
 function createTestGameState(

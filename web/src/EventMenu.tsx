@@ -86,7 +86,7 @@ export function EventMenu({ gameState, dispatch }: EventMenuProps) {
         })
         break
 
-      case 'forecast':
+      case 'forecast': {
         // Get top 6 cards from infection deck
         const topCards = gameState.infectionDeck.slice(0, 6).map((card) => ({
           city: card.city,
@@ -97,6 +97,7 @@ export function EventMenu({ gameState, dispatch }: EventMenuProps) {
           dialog: { type: 'forecast', cards: topCards },
         })
         break
+      }
     }
   }
 

@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 70
+- Build iterations: 71
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -295,3 +295,8 @@
     - Fixed flaky orchestrator test "Operations Expert builds without discarding card" (was failing when Ops Expert randomly got Washington card)
     - Fixed flaky PriorityBot test by clearing Atlanta cubes (bot was prioritizing treat over cure)
     - All 1080 tests now pass reliably!
+  - **Iteration 71: FIXED web UI ESLint errors**:
+    - Fixed unused import in EventMenu.test.tsx (removed unused `GameAction` import)
+    - Fixed lexical declaration in case block in EventMenu.tsx (wrapped forecast case in curly braces)
+    - All web UI tests pass (130 tests), lint passes, build passes
+    - All engine tests pass (1080 tests), typecheck/lint/format/tests pass
