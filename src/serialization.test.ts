@@ -24,7 +24,7 @@ import {
   ReplayImportError,
 } from "./serialization";
 import { createGame } from "./game";
-import { GameState, Disease, Role, CureStatus, TurnPhase } from "./types";
+import { GameState, Disease, Role, CureStatus, TurnPhase, GameStatus } from "./types";
 
 describe("serializeGame", () => {
   it("should serialize a game state to JSON string", () => {
@@ -283,6 +283,362 @@ describe("round-trip fidelity", () => {
       type: "event",
       event: "airlift",
     });
+  });
+
+  it("should preserve game state with mixed card types in player hands", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    // Add mixed cards to player hands
+    const updatedState: GameState = {
+      ...original,
+      players: original.players.map((p, i) =>
+        i === 0
+          ? {
+              ...p,
+              hand: [
+                { type: "city", city: "Atlanta", color: Disease.Blue },
+                { type: "event", event: "airlift" },
+                { type: "city", city: "Paris", color: Disease.Blue },
+                { type: "event", event: "forecast" },
+                { type: "epidemic" },
+              ],
+            }
+          : p,
+      ),
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.players[0]?.hand).toHaveLength(5);
+    expect(roundTrip.players[0]?.hand[0]).toEqual({
+      type: "city",
+      city: "Atlanta",
+      color: Disease.Blue,
+    });
+    expect(roundTrip.players[0]?.hand[1]).toEqual({ type: "event", event: "airlift" });
+    expect(roundTrip.players[0]?.hand[4]).toEqual({ type: "epidemic" });
+  });
+
+  it("should preserve game state in Draw phase", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      phase: TurnPhase.Draw,
+      actionsRemaining: 0,
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.phase).toBe(TurnPhase.Draw);
+    expect(roundTrip.actionsRemaining).toBe(0);
+  });
+
+  it("should preserve game state in Infect phase", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      phase: TurnPhase.Infect,
+      actionsRemaining: 0,
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.phase).toBe(TurnPhase.Infect);
+    expect(roundTrip.actionsRemaining).toBe(0);
+  });
+
+  it("should preserve different actions remaining values", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+
+    for (const actionsRemaining of [0, 1, 2, 3, 4]) {
+      const updatedState: GameState = {
+        ...original,
+        actionsRemaining,
+      };
+
+      const roundTrip = deserializeGame(serializeGame(updatedState));
+      expect(roundTrip.actionsRemaining).toBe(actionsRemaining);
+    }
+  });
+
+  it("should preserve game state with maximum outbreak count", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      outbreakCount: 8,
+      status: GameStatus.Lost,
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.outbreakCount).toBe(8);
+    expect(roundTrip.status).toBe(GameStatus.Lost);
+  });
+
+  it("should preserve won game status", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      status: GameStatus.Won,
+      cures: {
+        [Disease.Blue]: CureStatus.Cured,
+        [Disease.Yellow]: CureStatus.Cured,
+        [Disease.Black]: CureStatus.Cured,
+        [Disease.Red]: CureStatus.Cured,
+      },
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.status).toBe(GameStatus.Won);
+    expect(roundTrip.cures[Disease.Blue]).toBe(CureStatus.Cured);
+    expect(roundTrip.cures[Disease.Yellow]).toBe(CureStatus.Cured);
+    expect(roundTrip.cures[Disease.Black]).toBe(CureStatus.Cured);
+    expect(roundTrip.cures[Disease.Red]).toBe(CureStatus.Cured);
+  });
+
+  it("should preserve all diseases in different cure states", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      cures: {
+        [Disease.Blue]: CureStatus.Eradicated,
+        [Disease.Yellow]: CureStatus.Cured,
+        [Disease.Black]: CureStatus.Uncured,
+        [Disease.Red]: CureStatus.Uncured,
+      },
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.cures[Disease.Blue]).toBe(CureStatus.Eradicated);
+    expect(roundTrip.cures[Disease.Yellow]).toBe(CureStatus.Cured);
+    expect(roundTrip.cures[Disease.Black]).toBe(CureStatus.Uncured);
+    expect(roundTrip.cures[Disease.Red]).toBe(CureStatus.Uncured);
+  });
+
+  it("should preserve near-depleted cube supply", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      cubeSupply: {
+        [Disease.Blue]: 1,
+        [Disease.Yellow]: 0,
+        [Disease.Black]: 2,
+        [Disease.Red]: 3,
+      },
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.cubeSupply[Disease.Blue]).toBe(1);
+    expect(roundTrip.cubeSupply[Disease.Yellow]).toBe(0);
+    expect(roundTrip.cubeSupply[Disease.Black]).toBe(2);
+    expect(roundTrip.cubeSupply[Disease.Red]).toBe(3);
+  });
+
+  it("should preserve game state with multiple research stations", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const atlanta = original.board["Atlanta"];
+    const paris = original.board["Paris"];
+    const tokyo = original.board["Tokyo"];
+    const lima = original.board["Lima"];
+    const cairo = original.board["Cairo"];
+
+    const updatedState: GameState = {
+      ...original,
+      board: {
+        ...original.board,
+        Atlanta: atlanta ? { ...atlanta, hasResearchStation: true } : original.board["Atlanta"],
+        Paris: paris ? { ...paris, hasResearchStation: true } : original.board["Paris"],
+        Tokyo: tokyo ? { ...tokyo, hasResearchStation: true } : original.board["Tokyo"],
+        Lima: lima ? { ...lima, hasResearchStation: true } : original.board["Lima"],
+        Cairo: cairo ? { ...cairo, hasResearchStation: true } : original.board["Cairo"],
+      },
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.board["Atlanta"]?.hasResearchStation).toBe(true);
+    expect(roundTrip.board["Paris"]?.hasResearchStation).toBe(true);
+    expect(roundTrip.board["Tokyo"]?.hasResearchStation).toBe(true);
+    expect(roundTrip.board["Lima"]?.hasResearchStation).toBe(true);
+    expect(roundTrip.board["Cairo"]?.hasResearchStation).toBe(true);
+  });
+
+  it("should preserve game state with empty decks", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      playerDeck: [],
+      infectionDeck: [],
+      status: GameStatus.Lost,
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.playerDeck).toEqual([]);
+    expect(roundTrip.infectionDeck).toEqual([]);
+    expect(roundTrip.status).toBe(GameStatus.Lost);
+  });
+
+  it("should preserve game state with populated discard piles", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const updatedState: GameState = {
+      ...original,
+      playerDiscard: [
+        { type: "city", city: "Atlanta", color: Disease.Blue },
+        { type: "event", event: "airlift" },
+        { type: "city", city: "Paris", color: Disease.Blue },
+      ],
+      infectionDiscard: [
+        { city: "Tokyo", color: Disease.Red },
+        { city: "Seoul", color: Disease.Red },
+        { city: "Bangkok", color: Disease.Red },
+      ],
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.playerDiscard).toHaveLength(3);
+    expect(roundTrip.playerDiscard[0]).toEqual({
+      type: "city",
+      city: "Atlanta",
+      color: Disease.Blue,
+    });
+    expect(roundTrip.playerDiscard[1]).toEqual({ type: "event", event: "airlift" });
+    expect(roundTrip.infectionDiscard).toHaveLength(3);
+    expect(roundTrip.infectionDiscard[0]).toEqual({ city: "Tokyo", color: Disease.Red });
+  });
+
+  it("should preserve large game state with 4 players and advanced state", () => {
+    const original = createGame({ playerCount: 4, difficulty: 6 });
+    const updatedState: GameState = {
+      ...original,
+      currentPlayerIndex: 2,
+      turnNumber: 15,
+      phase: TurnPhase.Actions,
+      actionsRemaining: 2,
+      outbreakCount: 5,
+      infectionRatePosition: 4,
+      operationsExpertSpecialMoveUsed: true,
+      skipNextInfectionPhase: true,
+      cures: {
+        [Disease.Blue]: CureStatus.Eradicated,
+        [Disease.Yellow]: CureStatus.Cured,
+        [Disease.Black]: CureStatus.Uncured,
+        [Disease.Red]: CureStatus.Uncured,
+      },
+      cubeSupply: {
+        [Disease.Blue]: 24,
+        [Disease.Yellow]: 18,
+        [Disease.Black]: 12,
+        [Disease.Red]: 8,
+      },
+      players: original.players.map((p, i) => ({
+        ...p,
+        location: i === 0 ? "Paris" : i === 1 ? "Tokyo" : i === 2 ? "Lima" : "Cairo",
+        hand:
+          i === 2
+            ? [
+                { type: "city", city: "Lima", color: Disease.Yellow },
+                { type: "city", city: "Bogota", color: Disease.Yellow },
+                { type: "event", event: "government_grant" },
+                { type: "city", city: "Mexico City", color: Disease.Yellow },
+              ]
+            : p.hand,
+        storedEventCard:
+          p.role === Role.ContingencyPlanner
+            ? { type: "event", event: "resilient_population" }
+            : undefined,
+      })),
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    // Verify all complex state is preserved
+    expect(roundTrip.currentPlayerIndex).toBe(2);
+    expect(roundTrip.turnNumber).toBe(15);
+    expect(roundTrip.phase).toBe(TurnPhase.Actions);
+    expect(roundTrip.actionsRemaining).toBe(2);
+    expect(roundTrip.outbreakCount).toBe(5);
+    expect(roundTrip.infectionRatePosition).toBe(4);
+    expect(roundTrip.operationsExpertSpecialMoveUsed).toBe(true);
+    expect(roundTrip.skipNextInfectionPhase).toBe(true);
+    expect(roundTrip.cures[Disease.Blue]).toBe(CureStatus.Eradicated);
+    expect(roundTrip.cures[Disease.Yellow]).toBe(CureStatus.Cured);
+    expect(roundTrip.cubeSupply[Disease.Red]).toBe(8);
+    expect(roundTrip.players).toHaveLength(4);
+    expect(roundTrip.players[0]?.location).toBe("Paris");
+    expect(roundTrip.players[1]?.location).toBe("Tokyo");
+    expect(roundTrip.players[2]?.location).toBe("Lima");
+    expect(roundTrip.players[2]?.hand).toHaveLength(4);
+    expect(roundTrip.players[2]?.hand[2]).toEqual({
+      type: "event",
+      event: "government_grant",
+    });
+
+    // Find Contingency Planner and verify stored event
+    const contingencyPlanner = roundTrip.players.find((p) => p.role === Role.ContingencyPlanner);
+    if (contingencyPlanner) {
+      expect(contingencyPlanner.storedEventCard).toEqual({
+        type: "event",
+        event: "resilient_population",
+      });
+    }
+  });
+
+  it("should preserve board state with heavy infection", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+    const atlanta = original.board["Atlanta"];
+    const paris = original.board["Paris"];
+    const tokyo = original.board["Tokyo"];
+    const lima = original.board["Lima"];
+
+    const updatedState: GameState = {
+      ...original,
+      board: {
+        ...original.board,
+        Atlanta: atlanta ? { ...atlanta, blue: 3 } : original.board["Atlanta"],
+        Paris: paris ? { ...paris, blue: 2 } : original.board["Paris"],
+        Tokyo: tokyo ? { ...tokyo, red: 3 } : original.board["Tokyo"],
+        Lima: lima ? { ...lima, yellow: 1 } : original.board["Lima"],
+      },
+    };
+
+    const roundTrip = deserializeGame(serializeGame(updatedState));
+
+    expect(roundTrip.board["Atlanta"]?.blue).toBe(3);
+    expect(roundTrip.board["Paris"]?.blue).toBe(2);
+    expect(roundTrip.board["Tokyo"]?.red).toBe(3);
+    expect(roundTrip.board["Lima"]?.yellow).toBe(1);
+  });
+
+  it("should preserve all infection rate positions", () => {
+    const original = createGame({ playerCount: 2, difficulty: 4 });
+
+    for (const position of [1, 2, 3, 4, 5, 6, 7]) {
+      const updatedState: GameState = {
+        ...original,
+        infectionRatePosition: position,
+      };
+
+      const roundTrip = deserializeGame(serializeGame(updatedState));
+      expect(roundTrip.infectionRatePosition).toBe(position);
+    }
+  });
+
+  it("should preserve current player index for all positions", () => {
+    const original = createGame({ playerCount: 4, difficulty: 4 });
+
+    for (const index of [0, 1, 2, 3]) {
+      const updatedState: GameState = {
+        ...original,
+        currentPlayerIndex: index,
+      };
+
+      const roundTrip = deserializeGame(serializeGame(updatedState));
+      expect(roundTrip.currentPlayerIndex).toBe(index);
+    }
   });
 });
 

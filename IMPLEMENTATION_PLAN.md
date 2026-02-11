@@ -172,7 +172,7 @@
 - [x] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
 - [x] Add replay recording during live games (opt-in)
 - [x] Add JSON export/import for replay sharing
-- [ ] Add unit tests for serialization round-trip fidelity
+- [x] Add unit tests for serialization round-trip fidelity
 - [ ] Add integration tests for save/load, undo/redo, and replay workflows
 
 ### Phase 19: Web UI (Spec: web-ui.md)
