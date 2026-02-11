@@ -33,17 +33,9 @@ export function ActionBar({
         </div>
 
         <div className="ActionBar_groups">
-          {/* Movement Actions */}
-          <ActionGroup
-            title="Movement"
-            actions={availableActions}
-            patterns={[
-              /^drive-ferry:/,
-              /^direct-flight:/,
-              /^charter-flight:/,
-              /^shuttle-flight:/,
-              /^ops-expert-move:/,
-            ]}
+          {/* Movement Actions (two-step: pick type, then click city on map) */}
+          <MovementActions
+            availableActions={availableActions}
             selectedAction={selectedAction}
             dispatch={dispatch}
           />
@@ -150,6 +142,74 @@ export function ActionBar({
   }
 
   return null;
+}
+
+/**
+ * Movement action categories shown as type buttons (two-step flow).
+ * User clicks a movement type, then clicks a destination city on the map.
+ */
+const MOVEMENT_CATEGORIES = [
+  { prefix: "drive-ferry", label: "Drive / Ferry" },
+  { prefix: "direct-flight", label: "Direct Flight" },
+  { prefix: "charter-flight", label: "Charter Flight" },
+  { prefix: "shuttle-flight", label: "Shuttle Flight" },
+  { prefix: "ops-expert-move", label: "Ops Expert Move" },
+] as const;
+
+function MovementActions({
+  availableActions,
+  selectedAction,
+  dispatch,
+}: {
+  availableActions: string[];
+  selectedAction: string | null;
+  dispatch: Dispatch<GameAction>;
+}) {
+  const availableCategories = MOVEMENT_CATEGORIES.filter((cat) =>
+    availableActions.some((a) => a.startsWith(cat.prefix + ":")),
+  );
+
+  if (availableCategories.length === 0) return null;
+
+  return (
+    <div className="ActionBar_group">
+      <h3 className="ActionBar_groupTitle">Movement</h3>
+      <div className="ActionBar_groupButtons">
+        {availableCategories.map((cat) => {
+          const isSelected = selectedAction === cat.prefix;
+          const destinationCount = availableActions.filter((a) =>
+            a.startsWith(cat.prefix + ":"),
+          ).length;
+          return (
+            <button
+              key={cat.prefix}
+              className={`ActionBar_button ${isSelected ? "ActionBar_button--selected" : ""}`}
+              onClick={() => {
+                if (isSelected) {
+                  dispatch({ type: "SELECT_ACTION", action: null });
+                } else {
+                  dispatch({ type: "SELECT_ACTION", action: cat.prefix });
+                }
+              }}
+            >
+              {cat.label} ({destinationCount})
+            </button>
+          );
+        })}
+      </div>
+      {selectedAction && availableCategories.some((cat) => cat.prefix === selectedAction) && (
+        <div className="ActionBar_hint">
+          Click a highlighted city on the map{" "}
+          <button
+            className="ActionBar_hintCancel"
+            onClick={() => dispatch({ type: "SELECT_ACTION", action: null })}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**

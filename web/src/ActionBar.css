@@ -137,3 +137,27 @@
   display: flex;
   justify-content: center;
 }
+
+.ActionBar_hint {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #1a2a3a;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #88bbee;
+}
+
+.ActionBar_hintCancel {
+  background: none;
+  border: none;
+  color: #88bbee;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+  margin-left: 0.5rem;
+}
+
+.ActionBar_hintCancel:hover {
+  color: #aaddff;
+}

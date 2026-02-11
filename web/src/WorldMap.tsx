@@ -189,6 +189,9 @@ export function WorldMap({
     const destinations = new Set<string>()
 
     for (const action of availableActions) {
+      // If a movement type is selected, only show destinations for that type
+      if (selectedAction && !action.startsWith(selectedAction + ':')) continue
+
       // Movement actions: drive-ferry, direct-flight, charter-flight, shuttle-flight
       if (action.startsWith('drive-ferry:')) {
         const city = action.split(':')[1]

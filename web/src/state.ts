@@ -173,7 +173,7 @@ export function appReducer(state: AppState, action: GameAction): AppState {
         }
 
         // Auto-advance to infect phase (UI should prompt user to infect)
-        return state;
+        return { ...state };
       } catch (error) {
         console.error("Draw failed:", error);
         return state;
@@ -232,7 +232,7 @@ export function appReducer(state: AppState, action: GameAction): AppState {
           };
         }
 
-        return state;
+        return { ...state };
       } catch (error) {
         console.error("Event failed:", error);
         return state;

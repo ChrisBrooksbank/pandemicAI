@@ -1147,6 +1147,13 @@ export class OrchestratedGame {
         result = contingencyPlannerTakeEvent(this.gameState, params as EventType);
         break;
 
+      case "pass":
+        result = {
+          success: true,
+          state: { ...this.gameState, actionsRemaining: 0 },
+        };
+        break;
+
       default:
         throw new InvalidActionError(actionString, `Unknown action type: ${actionType}`);
     }
