@@ -21,12 +21,45 @@ function App() {
   const phase = state.game.getCurrentPhase()
   const actionsRemaining = state.game.getActionsRemaining()
   const gameState = state.game.getGameState()
+  const availableActions = state.game.getAvailableActions()
+
+  // Handle city clicks for movement actions
+  const handleCityClick = (cityName: string) => {
+    // Find the action to perform when clicking this city
+    // If a specific action is selected, use that; otherwise find any movement action
+    let action: string | null = null
+
+    if (state.selectedAction) {
+      // Selected action mode (e.g., user clicked "Direct Flight" button)
+      action = availableActions.find((a) =>
+        a.startsWith(`${state.selectedAction}:${cityName}`)
+      ) ?? null
+    } else {
+      // Auto-select the best movement action (prioritize drive-ferry)
+      action =
+        availableActions.find((a) => a === `drive-ferry:${cityName}`) ??
+        availableActions.find((a) => a === `shuttle-flight:${cityName}`) ??
+        availableActions.find((a) => a === `direct-flight:${cityName}`) ??
+        availableActions.find((a) => a === `charter-flight:${cityName}`) ??
+        availableActions.find((a) => a.startsWith(`ops-expert-move:${cityName}:`)) ??
+        null
+    }
+
+    if (action) {
+      dispatch({ type: 'PERFORM_ACTION', action })
+    }
+  }
 
   return (
     <div>
       <h1>Pandemic Game</h1>
 
-      <WorldMap gameState={gameState} />
+      <WorldMap
+        gameState={gameState}
+        availableActions={availableActions}
+        selectedAction={state.selectedAction}
+        onCityClick={handleCityClick}
+      />
 
       <div>
         <h2>Current Turn</h2>

@@ -22,3 +22,35 @@
   pointer-events: none;
   user-select: none;
 }
+
+.WorldMap_city--clickable:hover {
+  transform: scale(1.2);
+}
+
+.WorldMap_clickableHighlight {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.4;
+    r: 12;
+  }
+  50% {
+    opacity: 0.8;
+    r: 14;
+  }
+}
+
+.WorldMap_currentGlow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}

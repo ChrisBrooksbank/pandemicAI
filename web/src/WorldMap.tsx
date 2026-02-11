@@ -5,6 +5,12 @@ import './WorldMap.css'
 interface WorldMapProps {
   className?: string
   gameState?: GameState
+  /** Available actions from the game engine */
+  availableActions?: string[]
+  /** Currently selected action (for two-step flows) */
+  selectedAction?: string | null
+  /** Callback when a city is clicked */
+  onCityClick?: (cityName: string) => void
 }
 
 /**
@@ -133,7 +139,13 @@ function generateConnections() {
   return connections
 }
 
-export function WorldMap({ className, gameState }: WorldMapProps) {
+export function WorldMap({
+  className,
+  gameState,
+  availableActions = [],
+  selectedAction = null,
+  onCityClick
+}: WorldMapProps) {
   const connections = generateConnections()
 
   /**
@@ -168,6 +180,100 @@ export function WorldMap({ className, gameState }: WorldMapProps) {
     return gameState.players
       .map((player, index) => ({ player, index }))
       .filter(({ player }) => player.location === cityName)
+  }
+
+  /**
+   * Get the set of cities that can be clicked for movement actions
+   */
+  const getClickableDestinations = (): Set<string> => {
+    const destinations = new Set<string>()
+
+    for (const action of availableActions) {
+      // Movement actions: drive-ferry, direct-flight, charter-flight, shuttle-flight
+      if (action.startsWith('drive-ferry:')) {
+        const city = action.split(':')[1]
+        if (city) destinations.add(city)
+      } else if (action.startsWith('direct-flight:')) {
+        const city = action.split(':')[1]
+        if (city) destinations.add(city)
+      } else if (action.startsWith('charter-flight:')) {
+        const city = action.split(':')[1]
+        if (city) destinations.add(city)
+      } else if (action.startsWith('shuttle-flight:')) {
+        const city = action.split(':')[1]
+        if (city) destinations.add(city)
+      }
+      // Special role movements
+      else if (action.startsWith('ops-expert-move:')) {
+        const city = action.split(':')[1]
+        if (city) destinations.add(city)
+      }
+      // Dispatcher can move other players
+      else if (action.startsWith('dispatcher-move-other:')) {
+        const parts = action.split(':')
+        // Format: dispatcher-move-other:playerIndex:moveType:destination[:cardSource]
+        if (parts.length >= 4) {
+          const destination = parts[3]
+          if (destination) destinations.add(destination)
+        }
+      }
+    }
+
+    return destinations
+  }
+
+  /**
+   * Find the action to perform when a city is clicked
+   */
+  const getActionForCity = (cityName: string): string | null => {
+    // If a specific action type is selected (e.g., "direct-flight"), find that action
+    if (selectedAction) {
+      const action = availableActions.find(
+        (a) => a.startsWith(`${selectedAction}:${cityName}`)
+      )
+      if (action) return action
+    }
+
+    // Otherwise, find any movement action to this city (prioritize drive-ferry)
+    const driveAction = availableActions.find((a) => a === `drive-ferry:${cityName}`)
+    if (driveAction) return driveAction
+
+    const shuttleAction = availableActions.find((a) => a === `shuttle-flight:${cityName}`)
+    if (shuttleAction) return shuttleAction
+
+    const directAction = availableActions.find((a) => a === `direct-flight:${cityName}`)
+    if (directAction) return directAction
+
+    const charterAction = availableActions.find((a) => a === `charter-flight:${cityName}`)
+    if (charterAction) return charterAction
+
+    const opsExpertAction = availableActions.find((a) => a.startsWith(`ops-expert-move:${cityName}:`))
+    if (opsExpertAction) return opsExpertAction
+
+    return null
+  }
+
+  /**
+   * Check if a city is the current player's location
+   */
+  const isCurrentPlayerLocation = (cityName: string): boolean => {
+    if (!gameState) return false
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex]
+    return currentPlayer?.location === cityName
+  }
+
+  const clickableDestinations = getClickableDestinations()
+
+  /**
+   * Handle city click
+   */
+  const handleCityClick = (cityName: string) => {
+    if (!onCityClick) return
+
+    const action = getActionForCity(cityName)
+    if (action) {
+      onCityClick(cityName)
+    }
   }
 
   return (
@@ -280,9 +386,44 @@ export function WorldMap({ className, gameState }: WorldMapProps) {
           const cubes = getCubes(city.name)
           const hasStation = hasResearchStation(city.name)
           const playersHere = getPlayersAtCity(city.name)
+          const isClickable = clickableDestinations.has(city.name)
+          const isCurrentLocation = isCurrentPlayerLocation(city.name)
 
           return (
-            <g key={city.name} className="WorldMap_city">
+            <g
+              key={city.name}
+              className={`WorldMap_city ${isClickable ? 'WorldMap_city--clickable' : ''} ${isCurrentLocation ? 'WorldMap_city--current' : ''}`}
+              onClick={() => isClickable && handleCityClick(city.name)}
+              style={{ cursor: isClickable ? 'pointer' : 'default' }}
+            >
+              {/* Current player location glow */}
+              {isCurrentLocation && (
+                <circle
+                  cx={pos.x}
+                  cy={pos.y}
+                  r="14"
+                  fill="none"
+                  stroke="#FFD700"
+                  strokeWidth="2"
+                  opacity="0.6"
+                  className="WorldMap_currentGlow"
+                />
+              )}
+
+              {/* Clickable destination highlight */}
+              {isClickable && (
+                <circle
+                  cx={pos.x}
+                  cy={pos.y}
+                  r="12"
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="2"
+                  opacity="0.8"
+                  className="WorldMap_clickableHighlight"
+                />
+              )}
+
               {/* City circle */}
               <circle
                 cx={pos.x}
