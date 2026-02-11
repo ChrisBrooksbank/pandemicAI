@@ -1100,6 +1100,15 @@ describe("PriorityBot", () => {
         hand: blueCards,
       };
 
+      // Clear Atlanta's cubes to prevent PriorityBot from treating instead of curing
+      state.board.Atlanta = {
+        ...state.board.Atlanta,
+        blue: 0,
+        yellow: 0,
+        black: 0,
+        red: 0,
+      };
+
       const actions = getAvailableActions(state);
       const chosenAction = bot.chooseAction(state, actions);
 
@@ -1155,6 +1164,17 @@ describe("PriorityBot", () => {
         location: "Atlanta",
         hand: [],
       };
+
+      // Clear all cubes on the board to prevent PriorityBot from prioritizing treatment
+      for (const cityName of Object.keys(state.board)) {
+        state.board[cityName] = {
+          ...state.board[cityName],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
 
       const actions = getAvailableActions(state);
       const chosenAction = bot.chooseAction(state, actions);

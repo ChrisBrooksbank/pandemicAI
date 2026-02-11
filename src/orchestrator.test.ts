@@ -1003,6 +1003,8 @@ describe("OrchestratedGame.infectCities", () => {
         outbreakCount: 7, // One more outbreak will lose
         board: updatedBoard,
         infectionDeck: [atlantaCard, ...state.infectionDeck.slice(1)],
+        // Ensure players are not at Atlanta to prevent Medic passive ability from interfering
+        players: state.players.map((p) => ({ ...p, location: "Chicago", role: Role.Scientist })),
       };
       (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
 
@@ -1021,6 +1023,8 @@ describe("OrchestratedGame.infectCities", () => {
         ...state,
         phase: TurnPhase.Infect,
         cubeSupply: { ...state.cubeSupply, [Disease.Blue]: 0 },
+        // Ensure players are not at infected cities to prevent Medic passive ability from interfering
+        players: state.players.map((p) => ({ ...p, location: "Atlanta", role: Role.Scientist })),
       };
       (game as unknown as { gameState: GameState }).gameState = infectPhaseState;
 
