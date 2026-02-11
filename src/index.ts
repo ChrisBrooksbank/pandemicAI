@@ -112,4 +112,5 @@ export {
   type SerializedGameState,
   type SavePreview,
   type SaveSlot,
+  type StorageBackend,
 } from "./serialization";

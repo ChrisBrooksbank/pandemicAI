@@ -78,6 +78,40 @@ export interface SaveSlot {
 }
 
 /**
+ * Storage backend interface for saving and loading game data
+ * Implementations can use localStorage, filesystem, or in-memory storage
+ */
+export interface StorageBackend {
+  /**
+   * Saves data to storage under the given key
+   * @param key - Unique identifier for the saved data
+   * @param data - The data to save (will be a JSON string)
+   * @returns Promise that resolves when save is complete
+   */
+  save(key: string, data: string): Promise<void>;
+
+  /**
+   * Loads data from storage by key
+   * @param key - Unique identifier for the data to load
+   * @returns Promise that resolves to the saved data, or null if not found
+   */
+  load(key: string): Promise<string | null>;
+
+  /**
+   * Lists all saved game keys in storage
+   * @returns Promise that resolves to an array of saved game keys
+   */
+  list(): Promise<string[]>;
+
+  /**
+   * Deletes saved data by key
+   * @param key - Unique identifier for the data to delete
+   * @returns Promise that resolves when deletion is complete
+   */
+  delete(key: string): Promise<void>;
+}
+
+/**
  * Deserializes a JSON string back to a game state
  * @param json - The JSON string to deserialize
  * @returns The reconstructed game state
