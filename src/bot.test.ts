@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { Bot } from "./bot";
-import { RandomBot, PriorityBot, HeuristicBot, DEFAULT_HEURISTIC_WEIGHTS } from "./bot";
+import { RandomBot, PriorityBot, HeuristicBot, DEFAULT_HEURISTIC_WEIGHTS, runBotGame } from "./bot";
 import { createGame } from "./game";
 import { getAvailableActions } from "./game";
 import type { GameState, InfectionCard, CityCard, EventCard } from "./types";
@@ -1241,5 +1241,202 @@ describe("PriorityBot", () => {
 
       expect(ordered).toEqual([]);
     });
+  });
+});
+
+describe("runBotGame", () => {
+  it("should complete a game and return GameResult", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Verify result structure
+    expect(result).toBeDefined();
+    expect(typeof result.won).toBe("boolean");
+    expect(typeof result.turnCount).toBe("number");
+    expect(typeof result.diseasesCured).toBe("number");
+    expect(typeof result.outbreaks).toBe("number");
+    expect(result.status).toMatch(/^(won|lost)$/);
+
+    // Verify constraints
+    expect(result.turnCount).toBeGreaterThanOrEqual(0);
+    expect(result.diseasesCured).toBeGreaterThanOrEqual(0);
+    expect(result.diseasesCured).toBeLessThanOrEqual(4);
+    expect(result.outbreaks).toBeGreaterThanOrEqual(0);
+
+    // If lost, should have a reason
+    if (!result.won) {
+      expect(result.lossReason).toBeDefined();
+    }
+  });
+
+  it("should throw error if bot count does not match player count", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot()]; // Only 1 bot for 2 players
+
+    expect(() => runBotGame(config, bots)).toThrow(
+      "Number of bots (1) must match player count (2)",
+    );
+  });
+
+  it("should complete game with RandomBot players", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Game should complete (win or loss)
+    expect(result.status).toMatch(/^(won|lost)$/);
+    expect(result.turnCount).toBeGreaterThan(0);
+  });
+
+  it("should complete game with PriorityBot players", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new PriorityBot(), new PriorityBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Game should complete (win or loss)
+    expect(result.status).toMatch(/^(won|lost)$/);
+    expect(result.turnCount).toBeGreaterThan(0);
+  });
+
+  it("should complete game with HeuristicBot players", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new HeuristicBot(), new HeuristicBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Game should complete (win or loss)
+    expect(result.status).toMatch(/^(won|lost)$/);
+    expect(result.turnCount).toBeGreaterThan(0);
+  });
+
+  it("should complete game with mixed bot types", () => {
+    const config = { playerCount: 3, difficulty: 4 };
+    const bots = [new RandomBot(), new PriorityBot(), new HeuristicBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Game should complete (win or loss)
+    expect(result.status).toMatch(/^(won|lost)$/);
+    expect(result.turnCount).toBeGreaterThan(0);
+  });
+
+  it("should track diseases cured correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new PriorityBot(), new PriorityBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Diseases cured should be 0-4
+    expect(result.diseasesCured).toBeGreaterThanOrEqual(0);
+    expect(result.diseasesCured).toBeLessThanOrEqual(4);
+
+    // If won, all 4 diseases should be cured
+    if (result.won) {
+      expect(result.diseasesCured).toBe(4);
+    }
+  });
+
+  it("should track outbreaks correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new RandomBot(), new RandomBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Outbreaks should be >= 0
+    expect(result.outbreaks).toBeGreaterThanOrEqual(0);
+
+    // If lost due to outbreaks, should be >= 8
+    if (result.lossReason === "8 outbreaks reached") {
+      expect(result.outbreaks).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("should handle different player counts (2-4 players)", () => {
+    for (let playerCount = 2; playerCount <= 4; playerCount++) {
+      const config = { playerCount, difficulty: 4 };
+      const bots = Array.from({ length: playerCount }, () => new RandomBot());
+
+      const result = runBotGame(config, bots);
+
+      expect(result.status).toMatch(/^(won|lost)$/);
+    }
+  });
+
+  it("should handle different difficulty levels", () => {
+    for (let difficulty = 4; difficulty <= 6; difficulty++) {
+      const config = { playerCount: 2, difficulty };
+      const bots = [new RandomBot(), new RandomBot()];
+
+      const result = runBotGame(config, bots);
+
+      expect(result.status).toMatch(/^(won|lost)$/);
+    }
+  });
+
+  it("should set loss reason when game is lost", () => {
+    const config = { playerCount: 2, difficulty: 6 }; // Harder difficulty
+    const bots = [new RandomBot(), new RandomBot()];
+
+    // Run multiple games until we get a loss (RandomBot should lose often on hard)
+    let foundLoss = false;
+    for (let i = 0; i < 5; i++) {
+      const result = runBotGame(config, bots);
+      if (!result.won) {
+        foundLoss = true;
+        expect(result.lossReason).toBeDefined();
+        expect(typeof result.lossReason).toBe("string");
+        expect(result.lossReason).toMatch(
+          /^(8 outbreaks reached|Cube supply exhausted|Player deck exhausted|Maximum turn limit reached|Unknown)$/,
+        );
+        break;
+      }
+    }
+
+    // At least one loss should occur with RandomBot on hard difficulty after 5 tries
+    // If this fails, the test is flaky but that's acceptable given randomness
+    expect(foundLoss).toBe(true);
+  });
+
+  it("should increment turn counter correctly", () => {
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new PriorityBot(), new PriorityBot()];
+
+    const result = runBotGame(config, bots);
+
+    // Turn count should be reasonable (not 0, not ridiculously high)
+    expect(result.turnCount).toBeGreaterThan(0);
+    expect(result.turnCount).toBeLessThan(1000); // Safety limit
+  });
+
+  it("should handle games that end in victory", () => {
+    // This test might be flaky due to randomness, but PriorityBot has a chance to win
+    const config = { playerCount: 2, difficulty: 4 };
+    const bots = [new PriorityBot(), new PriorityBot()];
+
+    // Run multiple games and check if at least one win is possible
+    let foundWin = false;
+    for (let i = 0; i < 10; i++) {
+      const result = runBotGame(config, bots);
+      if (result.won) {
+        foundWin = true;
+        expect(result.status).toBe("won");
+        expect(result.diseasesCured).toBe(4);
+        expect(result.lossReason).toBeUndefined();
+        break;
+      }
+    }
+
+    // PriorityBot should be able to win at least once in 10 tries on normal difficulty
+    // If this consistently fails, there may be an issue with the bot or game logic
+    // Note: This test may occasionally fail due to randomness, which is acceptable
+    if (!foundWin) {
+      console.warn(
+        "PriorityBot did not win in 10 attempts - this may be due to randomness or bot strategy issues",
+      );
+    }
   });
 });

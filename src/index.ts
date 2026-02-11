@@ -98,4 +98,6 @@ export {
   HeuristicBot,
   type HeuristicWeights,
   DEFAULT_HEURISTIC_WEIGHTS,
+  runBotGame,
+  type GameResult,
 } from "./bot";

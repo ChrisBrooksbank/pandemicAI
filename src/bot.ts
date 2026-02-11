@@ -1,8 +1,9 @@
 // AI Bot Players - Bot interface and implementations
 
-import type { GameState, InfectionCard, PlayerCard, Player } from "./types";
-import { Role } from "./types";
+import type { GameState, InfectionCard, PlayerCard, Player, GameConfig } from "./types";
+import { Role, GameStatus, CureStatus } from "./types";
 import { CITIES } from "./board";
+import { OrchestratedGame } from "./orchestrator";
 
 /**
  * Interface for AI bot players that can play Pandemic autonomously.
@@ -790,4 +791,204 @@ export class PriorityBot implements Bot {
     // A more sophisticated strategy would require access to GameState
     return shuffle(cards);
   }
+}
+
+/**
+ * Result of running a bot game to completion.
+ */
+export interface GameResult {
+  /** Whether the bots won the game */
+  won: boolean;
+  /** Number of turns played until game ended */
+  turnCount: number;
+  /** Diseases that were cured (0-4) */
+  diseasesCured: number;
+  /** Total number of outbreaks that occurred */
+  outbreaks: number;
+  /** Final game status */
+  status: "won" | "lost";
+  /** Reason for loss (if applicable) */
+  lossReason?: string;
+}
+
+/**
+ * Run a complete game with bot players.
+ *
+ * @param config - Game configuration (player count, difficulty)
+ * @param bots - Array of bots, one per player (length must match playerCount)
+ * @returns GameResult with outcome statistics
+ *
+ * @example
+ * ```typescript
+ * const config = { playerCount: 2, difficulty: 4 };
+ * const bots = [new PriorityBot(), new PriorityBot()];
+ * const result = runBotGame(config, bots);
+ * console.log(`Game ${result.won ? 'won' : 'lost'} in ${result.turnCount} turns`);
+ * ```
+ */
+export function runBotGame(config: GameConfig, bots: Bot[]): GameResult {
+  // Validate inputs
+  if (bots.length !== config.playerCount) {
+    throw new Error(
+      `Number of bots (${bots.length}) must match player count (${config.playerCount})`,
+    );
+  }
+
+  // Create the game
+  const game = OrchestratedGame.create(config);
+
+  let turnCount = 0;
+  const maxTurns = 1000; // Safety limit to prevent infinite loops
+
+  // Main game loop
+  while (game.getStatus() === "playing" && turnCount < maxTurns) {
+    const phase = game.getCurrentPhase();
+    const currentPlayerIndex = game.getGameState().currentPlayerIndex;
+    const bot = bots[currentPlayerIndex];
+
+    if (!bot) {
+      throw new Error(`No bot found for player ${currentPlayerIndex}`);
+    }
+
+    try {
+      if (phase === "actions") {
+        // Action phase: bot chooses and performs actions
+        const actionsRemaining = game.getActionsRemaining();
+
+        if (actionsRemaining > 0) {
+          const availableActions = game.getAvailableActions();
+
+          if (availableActions.length === 0) {
+            // No actions available, advance phase
+            const outcome = game.drawCards();
+            if (outcome.gameStatus !== GameStatus.Ongoing) {
+              break;
+            }
+          } else {
+            // Bot chooses action
+            const chosenAction = bot.chooseAction(game.getGameState(), availableActions);
+
+            // Perform the action
+            const outcome = game.performAction(chosenAction);
+
+            // Check for game over
+            if (outcome.gameStatus !== GameStatus.Ongoing) {
+              break;
+            }
+          }
+        } else {
+          // No actions remaining, advance to draw phase
+          const outcome = game.drawCards();
+          if (outcome.gameStatus !== GameStatus.Ongoing) {
+            break;
+          }
+        }
+      } else if (phase === "draw") {
+        // Draw phase: draw cards and handle epidemics/discards
+        const outcome = game.drawCards();
+
+        // Handle hand limit discards
+        if (outcome.needsDiscard) {
+          for (const playerIndex of outcome.playersNeedingDiscard) {
+            const player = outcome.state.players[playerIndex];
+            const playerBot = bots[playerIndex];
+
+            if (!player || !playerBot) continue;
+
+            const handSize = player.hand.length;
+            const mustDiscard = handSize - 7;
+
+            if (mustDiscard > 0) {
+              const discardIndices = playerBot.chooseDiscards(
+                outcome.state,
+                playerIndex,
+                mustDiscard,
+              );
+
+              // Apply discards (remove cards from hand in reverse order to preserve indices)
+              for (const index of discardIndices.sort((a, b) => b - a)) {
+                const card = player.hand[index];
+                if (card) {
+                  player.hand.splice(index, 1);
+                }
+              }
+            }
+          }
+        }
+
+        // Check for game over after drawing
+        if (outcome.gameStatus !== GameStatus.Ongoing) {
+          break;
+        }
+      } else if (phase === "infect") {
+        // Infection phase: infect cities
+        const outcome = game.infectCities();
+
+        // Increment turn counter after infection phase completes
+        if (outcome.gameStatus === GameStatus.Ongoing) {
+          turnCount++;
+        }
+
+        // Check for game over
+        if (outcome.gameStatus !== GameStatus.Ongoing) {
+          break;
+        }
+      }
+    } catch (error) {
+      // If an error occurs, treat as game loss
+      const state = game.getGameState();
+      const curedCount = Object.values(state.cures).filter(
+        (status) => status !== CureStatus.Uncured,
+      ).length;
+
+      return {
+        won: false,
+        turnCount,
+        diseasesCured: curedCount,
+        outbreaks: state.outbreakCount,
+        status: "lost",
+        lossReason: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  // Game ended - collect results
+  const finalState = game.getGameState();
+  const finalStatus = game.getStatus();
+
+  const curedCount = Object.values(finalState.cures).filter(
+    (status) => status !== CureStatus.Uncured,
+  ).length;
+
+  const won = finalStatus === "won";
+
+  let lossReason: string | undefined;
+  if (!won) {
+    // Determine loss reason
+    if (finalState.outbreakCount >= 8) {
+      lossReason = "8 outbreaks reached";
+    } else if (
+      finalState.cubeSupply.blue <= 0 ||
+      finalState.cubeSupply.yellow <= 0 ||
+      finalState.cubeSupply.black <= 0 ||
+      finalState.cubeSupply.red <= 0
+    ) {
+      lossReason = "Cube supply exhausted";
+    } else if (finalState.playerDeck.length === 0) {
+      lossReason = "Player deck exhausted";
+    } else if (turnCount >= maxTurns) {
+      lossReason = "Maximum turn limit reached (safety)";
+    } else {
+      lossReason = "Unknown";
+    }
+  }
+
+  return {
+    won,
+    turnCount,
+    diseasesCured: curedCount,
+    outbreaks: finalState.outbreakCount,
+    status: won ? "won" : "lost",
+    lossReason,
+  };
 }

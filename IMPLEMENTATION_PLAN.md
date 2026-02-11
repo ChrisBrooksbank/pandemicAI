@@ -149,7 +149,7 @@
 - [x] Implement RandomBot (selects random actions for baseline/fuzz-testing)
 - [x] Implement PriorityBot with rule-based strategy (treat 3-cube cities, discover cures, move to threats)
 - [x] Implement HeuristicBot with scored actions (disease threat, cure progress, station coverage, etc.)
-- [ ] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
+- [x] Implement runBotGame() function returning GameResult (won/lost, turn count, diseases cured)
 - [ ] Implement runBotGames() for batch simulation with AggregateResults (win rate, averages)
 - [ ] Add BotPlayerConfig for mixed human/bot games
 - [ ] Add BotDecision diagnostics with score breakdowns for heuristic bot
