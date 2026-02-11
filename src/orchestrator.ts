@@ -1179,7 +1179,10 @@ export class OrchestratedGame {
     for (const color of colors) {
       const oldCure = oldState.cures[color];
       const newCure = this.gameState.cures[color];
-      if (oldCure === CureStatus.Uncured && newCure === CureStatus.Cured) {
+      if (
+        oldCure === CureStatus.Uncured &&
+        (newCure === CureStatus.Cured || newCure === CureStatus.Eradicated)
+      ) {
         this.logEvent({
           type: "cure-discovered",
           disease: color,

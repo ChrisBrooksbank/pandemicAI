@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 63
+- Build iterations: 64
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -273,3 +273,9 @@
     - Test "rejects event card player does not have" was flaky because it relied on random card deals from `createTestGameWithSetup()`
     - Fixed by explicitly clearing player 0's hand and storedEventCard to ensure they don't have any event cards
     - All 1080 tests continue to pass reliably!
+  - **Iteration 64: FIXED orchestrator cure-discovered event logging bug**:
+    - Test "logs cure-discovered events" was failing when disease went from Uncured → Eradicated (skipping Cured state)
+    - Root cause: `performAction()` only logged cure-discovered for Uncured → Cured transitions, not Uncured → Eradicated
+    - This happened when discovering a cure for a disease with no cubes on the board (immediate eradication)
+    - Fixed by updating condition to log cure-discovered for both Cured and Eradicated transitions from Uncured
+    - All 1080 tests now pass reliably!
