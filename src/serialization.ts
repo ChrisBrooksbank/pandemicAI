@@ -1,6 +1,6 @@
 // Serialization and persistence functionality for Pandemic game state
 
-import { Role, type GameState } from "./types";
+import { Role, TurnPhase, type GameState } from "./types";
 
 // Type declarations for browser APIs
 declare global {
@@ -462,6 +462,184 @@ export async function deleteSave(slotId: string, backend: StorageBackend): Promi
   // Delete both the game state and metadata
   await backend.delete(slotId);
   await backend.delete(`${slotId}-metadata`);
+}
+
+/**
+ * Represents a snapshot in game history for undo/redo functionality
+ */
+export interface GameHistoryEntry {
+  /** The game state at this point in history */
+  state: GameState;
+  /** Description of the action that led to this state */
+  action: string;
+}
+
+/**
+ * Manages game history for undo/redo functionality
+ */
+export interface GameHistory {
+  /** Stack of past states (oldest to newest) */
+  past: GameHistoryEntry[];
+  /** Current position in the history (-1 if at the end) */
+  currentIndex: number;
+  /** Maximum number of states to keep in history (default: 50) */
+  maxDepth: number;
+}
+
+/**
+ * Creates a new empty game history
+ * @param maxDepth - Maximum number of states to keep (default: 50)
+ * @returns A new GameHistory object
+ */
+export function createGameHistory(maxDepth = 50): GameHistory {
+  return {
+    past: [],
+    currentIndex: -1,
+    maxDepth,
+  };
+}
+
+/**
+ * Adds a new state to the game history
+ * - Clears any redo stack (states after currentIndex)
+ * - Enforces maximum depth by removing oldest states
+ * - Updates currentIndex to point to the new state
+ *
+ * @param history - The current game history
+ * @param state - The new game state to record
+ * @param action - Description of the action that led to this state
+ * @returns Updated game history
+ */
+export function pushState(history: GameHistory, state: GameState, action: string): GameHistory {
+  // Create new entry
+  const entry: GameHistoryEntry = { state, action };
+
+  // If we're not at the end of history (user has undone), clear the redo stack
+  let newPast: GameHistoryEntry[];
+  if (history.currentIndex === -1 || history.currentIndex === history.past.length - 1) {
+    // At the end - just append
+    newPast = [...history.past, entry];
+  } else {
+    // In the middle - discard everything after currentIndex
+    newPast = [...history.past.slice(0, history.currentIndex + 1), entry];
+  }
+
+  // Enforce max depth by removing oldest entries
+  if (newPast.length > history.maxDepth) {
+    newPast = newPast.slice(newPast.length - history.maxDepth);
+  }
+
+  return {
+    ...history,
+    past: newPast,
+    currentIndex: newPast.length - 1,
+  };
+}
+
+/**
+ * Undoes the last action, returning to the previous state
+ * @param history - The current game history
+ * @returns Updated history and the previous game state, or null if nothing to undo
+ */
+export function undo(history: GameHistory): { history: GameHistory; state: GameState } | null {
+  // Can't undo if we're at the beginning or history is empty
+  if (history.currentIndex <= 0 || history.past.length === 0) {
+    return null;
+  }
+
+  // Move back one step
+  const newIndex = history.currentIndex - 1;
+  const previousEntry = history.past[newIndex];
+
+  if (previousEntry === undefined) {
+    return null;
+  }
+
+  return {
+    history: {
+      ...history,
+      currentIndex: newIndex,
+    },
+    state: previousEntry.state,
+  };
+}
+
+/**
+ * Redoes a previously undone action, moving forward in history
+ * @param history - The current game history
+ * @returns Updated history and the next game state, or null if nothing to redo
+ */
+export function redo(history: GameHistory): { history: GameHistory; state: GameState } | null {
+  // Can't redo if we're at the end or history is empty
+  if (
+    history.currentIndex === -1 ||
+    history.currentIndex >= history.past.length - 1 ||
+    history.past.length === 0
+  ) {
+    return null;
+  }
+
+  // Move forward one step
+  const newIndex = history.currentIndex + 1;
+  const nextEntry = history.past[newIndex];
+
+  if (nextEntry === undefined) {
+    return null;
+  }
+
+  return {
+    history: {
+      ...history,
+      currentIndex: newIndex,
+    },
+    state: nextEntry.state,
+  };
+}
+
+/**
+ * Checks if undo is allowed for the given game state
+ * Undo is only allowed during the Actions phase
+ * @param state - The current game state
+ * @param history - The current game history
+ * @returns true if undo is allowed, false otherwise
+ */
+export function canUndo(state: GameState, history: GameHistory): boolean {
+  // Must be in Actions phase
+  if (state.phase !== TurnPhase.Actions) {
+    return false;
+  }
+
+  // Must have history to undo
+  if (history.currentIndex <= 0 || history.past.length === 0) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Checks if redo is allowed for the given game state
+ * Redo is only allowed during the Actions phase
+ * @param state - The current game state
+ * @param history - The current game history
+ * @returns true if redo is allowed, false otherwise
+ */
+export function canRedo(state: GameState, history: GameHistory): boolean {
+  // Must be in Actions phase
+  if (state.phase !== TurnPhase.Actions) {
+    return false;
+  }
+
+  // Must have future states to redo
+  if (
+    history.currentIndex === -1 ||
+    history.currentIndex >= history.past.length - 1 ||
+    history.past.length === 0
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

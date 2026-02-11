@@ -120,4 +120,12 @@ export {
   type SavePreview,
   type SaveSlot,
   type StorageBackend,
+  type GameHistory,
+  type GameHistoryEntry,
+  createGameHistory,
+  pushState,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
 } from "./serialization";

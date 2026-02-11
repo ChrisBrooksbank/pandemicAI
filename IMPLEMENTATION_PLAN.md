@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 58
+- Build iterations: 59
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -166,8 +166,8 @@
 - [x] Implement FileSystemBackend for Node.js CLI/testing scenarios
 - [x] Implement InMemoryBackend for testing
 - [x] Implement saveGame(), loadGame(), listSaves(), deleteSave() with injectable backend
-- [ ] Implement GameHistory type and pushState(), undo(), redo() functions
-- [ ] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)
+- [x] Implement GameHistory type and pushState(), undo(), redo() functions
+- [x] Add history depth limit (default 50) and phase restrictions (undo only in Actions phase)
 - [ ] Implement GameReplay type (initial state + action sequence)
 - [ ] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
 - [ ] Add replay recording during live games (opt-in)

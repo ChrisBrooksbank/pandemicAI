@@ -12,9 +12,15 @@ import {
   InMemoryBackend,
   SavePreview,
   SaveSlot,
+  createGameHistory,
+  pushState,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
 } from "./serialization";
 import { createGame } from "./game";
-import { GameState, Disease, Role, CureStatus } from "./types";
+import { GameState, Disease, Role, CureStatus, TurnPhase } from "./types";
 
 describe("serializeGame", () => {
   it("should serialize a game state to JSON string", () => {
@@ -749,5 +755,512 @@ describe("save/load integration", () => {
 
     expect(loaded1.config.playerCount).toBe(2);
     expect(loaded2.config.playerCount).toBe(3);
+  });
+});
+
+describe("createGameHistory", () => {
+  it("should create an empty history with default max depth", () => {
+    const history = createGameHistory();
+
+    expect(history.past).toEqual([]);
+    expect(history.currentIndex).toBe(-1);
+    expect(history.maxDepth).toBe(50);
+  });
+
+  it("should create an empty history with custom max depth", () => {
+    const history = createGameHistory(100);
+
+    expect(history.past).toEqual([]);
+    expect(history.currentIndex).toBe(-1);
+    expect(history.maxDepth).toBe(100);
+  });
+});
+
+describe("pushState", () => {
+  it("should add a state to empty history", () => {
+    const history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+
+    const newHistory = pushState(history, state, "Initial state");
+
+    expect(newHistory.past).toHaveLength(1);
+    expect(newHistory.past[0]?.state).toEqual(state);
+    expect(newHistory.past[0]?.action).toBe("Initial state");
+    expect(newHistory.currentIndex).toBe(0);
+  });
+
+  it("should append states sequentially", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    expect(history.past).toHaveLength(3);
+    expect(history.currentIndex).toBe(2);
+    expect(history.past[0]?.action).toBe("State 1");
+    expect(history.past[1]?.action).toBe("State 2");
+    expect(history.past[2]?.action).toBe("State 3");
+  });
+
+  it("should enforce max depth by removing oldest entries", () => {
+    let history = createGameHistory(3); // Small max depth for testing
+    const baseState = createGame({ playerCount: 2, difficulty: 4 });
+
+    // Add 5 states (exceeds max depth of 3)
+    for (let i = 1; i <= 5; i++) {
+      const state = { ...baseState, turnNumber: i };
+      history = pushState(history, state, `State ${i}`);
+    }
+
+    // Should only keep the last 3
+    expect(history.past).toHaveLength(3);
+    expect(history.past[0]?.action).toBe("State 3");
+    expect(history.past[1]?.action).toBe("State 4");
+    expect(history.past[2]?.action).toBe("State 5");
+    expect(history.currentIndex).toBe(2);
+  });
+
+  it("should clear redo stack when pushing after undo", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+    const state4 = { ...state1, turnNumber: 4 };
+
+    // Build history
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo twice
+    const undoResult1 = undo(history);
+    expect(undoResult1).not.toBeNull();
+    if (undoResult1) {
+      history = undoResult1.history;
+    }
+
+    const undoResult2 = undo(history);
+    expect(undoResult2).not.toBeNull();
+    if (undoResult2) {
+      history = undoResult2.history;
+    }
+
+    expect(history.currentIndex).toBe(0);
+    expect(history.past).toHaveLength(3);
+
+    // Push new state - should clear states 2 and 3
+    history = pushState(history, state4, "State 4");
+
+    expect(history.past).toHaveLength(2);
+    expect(history.past[0]?.action).toBe("State 1");
+    expect(history.past[1]?.action).toBe("State 4");
+    expect(history.currentIndex).toBe(1);
+  });
+});
+
+describe("undo", () => {
+  it("should return null for empty history", () => {
+    const history = createGameHistory();
+    const result = undo(history);
+
+    expect(result).toBeNull();
+  });
+
+  it("should return null when at the first state", () => {
+    let history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    history = pushState(history, state, "First state");
+
+    const result = undo(history);
+
+    expect(result).toBeNull();
+  });
+
+  it("should move back one state", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    const result = undo(history);
+
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.state).toEqual(state2);
+      expect(result.history.currentIndex).toBe(1);
+    }
+  });
+
+  it("should allow multiple consecutive undos", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo twice
+    const result1 = undo(history);
+    expect(result1).not.toBeNull();
+    if (result1) {
+      history = result1.history;
+      expect(result1.state).toEqual(state2);
+    }
+
+    const result2 = undo(history);
+    expect(result2).not.toBeNull();
+    if (result2) {
+      history = result2.history;
+      expect(result2.state).toEqual(state1);
+      expect(history.currentIndex).toBe(0);
+    }
+  });
+
+  it("should preserve all history entries for potential redo", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    const result = undo(history);
+    expect(result).not.toBeNull();
+    if (result) {
+      history = result.history;
+      // Past should still contain both states
+      expect(history.past).toHaveLength(2);
+      expect(history.currentIndex).toBe(0);
+    }
+  });
+});
+
+describe("redo", () => {
+  it("should return null for empty history", () => {
+    const history = createGameHistory();
+    const result = redo(history);
+
+    expect(result).toBeNull();
+  });
+
+  it("should return null when at the latest state", () => {
+    let history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    history = pushState(history, state, "State 1");
+
+    const result = redo(history);
+
+    expect(result).toBeNull();
+  });
+
+  it("should return null when no undo has been performed", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    const result = redo(history);
+
+    expect(result).toBeNull();
+  });
+
+  it("should move forward one state after undo", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo
+    const undoResult = undo(history);
+    expect(undoResult).not.toBeNull();
+    if (undoResult) {
+      history = undoResult.history;
+    }
+
+    // Redo
+    const redoResult = redo(history);
+    expect(redoResult).not.toBeNull();
+    if (redoResult) {
+      expect(redoResult.state).toEqual(state3);
+      expect(redoResult.history.currentIndex).toBe(2);
+    }
+  });
+
+  it("should allow multiple consecutive redos", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo twice
+    let undoResult = undo(history);
+    if (undoResult) history = undoResult.history;
+    undoResult = undo(history);
+    if (undoResult) history = undoResult.history;
+
+    expect(history.currentIndex).toBe(0);
+
+    // Redo twice
+    const redoResult1 = redo(history);
+    expect(redoResult1).not.toBeNull();
+    if (redoResult1) {
+      history = redoResult1.history;
+      expect(redoResult1.state).toEqual(state2);
+    }
+
+    const redoResult2 = redo(history);
+    expect(redoResult2).not.toBeNull();
+    if (redoResult2) {
+      expect(redoResult2.state).toEqual(state3);
+      expect(redoResult2.history.currentIndex).toBe(2);
+    }
+  });
+});
+
+describe("canUndo", () => {
+  it("should return false for empty history", () => {
+    const history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+
+    expect(canUndo(state, history)).toBe(false);
+  });
+
+  it("should return false when at the first state", () => {
+    let history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+    history = pushState(history, state, "First state");
+
+    expect(canUndo(state, history)).toBe(false);
+  });
+
+  it("should return false when not in Actions phase", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, phase: TurnPhase.Draw, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    expect(canUndo(state2, history)).toBe(false);
+  });
+
+  it("should return true when in Actions phase with history", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, phase: TurnPhase.Actions, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    expect(canUndo(state2, history)).toBe(true);
+  });
+
+  it("should return false during Infect phase", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, phase: TurnPhase.Infect, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    expect(canUndo(state2, history)).toBe(false);
+  });
+});
+
+describe("canRedo", () => {
+  it("should return false for empty history", () => {
+    const history = createGameHistory();
+    const state = createGame({ playerCount: 2, difficulty: 4 });
+
+    expect(canRedo(state, history)).toBe(false);
+  });
+
+  it("should return false when at the latest state", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    expect(canRedo(state2, history)).toBe(false);
+  });
+
+  it("should return false when not in Actions phase", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    // Undo
+    const undoResult = undo(history);
+    if (undoResult) history = undoResult.history;
+
+    // Change phase to Draw
+    const state1Draw = { ...state1, phase: TurnPhase.Draw };
+
+    expect(canRedo(state1Draw, history)).toBe(false);
+  });
+
+  it("should return true when in Actions phase after undo", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, phase: TurnPhase.Actions, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    // Undo
+    const undoResult = undo(history);
+    expect(undoResult).not.toBeNull();
+    if (undoResult) {
+      history = undoResult.history;
+      expect(canRedo(undoResult.state, history)).toBe(true);
+    }
+  });
+
+  it("should return false during Infect phase even after undo", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+
+    // Undo
+    const undoResult = undo(history);
+    if (undoResult) history = undoResult.history;
+
+    // Change phase to Infect
+    const state1Infect = { ...state1, phase: TurnPhase.Infect };
+
+    expect(canRedo(state1Infect, history)).toBe(false);
+  });
+});
+
+describe("undo/redo integration", () => {
+  it("should support full undo/redo cycle", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+
+    // Build history
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo twice
+    let result = undo(history);
+    expect(result?.state).toEqual(state2);
+    if (result) history = result.history;
+
+    result = undo(history);
+    expect(result?.state).toEqual(state1);
+    if (result) history = result.history;
+
+    // Redo twice
+    result = redo(history);
+    expect(result?.state).toEqual(state2);
+    if (result) history = result.history;
+
+    result = redo(history);
+    expect(result?.state).toEqual(state3);
+    if (result) history = result.history;
+
+    expect(history.currentIndex).toBe(2);
+  });
+
+  it("should handle branching history (undo then new action)", () => {
+    let history = createGameHistory();
+    const state1 = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...state1, turnNumber: 2 };
+    const state3 = { ...state1, turnNumber: 3 };
+    const state4 = { ...state1, turnNumber: 4 };
+
+    // Build initial history
+    history = pushState(history, state1, "State 1");
+    history = pushState(history, state2, "State 2");
+    history = pushState(history, state3, "State 3");
+
+    // Undo once
+    const undoResult = undo(history);
+    if (undoResult) history = undoResult.history;
+
+    // Push new state - creates new branch
+    history = pushState(history, state4, "State 4");
+
+    // Should not be able to redo to state 3 anymore
+    const redoResult = redo(history);
+    expect(redoResult).toBeNull();
+
+    // History should contain state 1, state 2, and state 4
+    expect(history.past).toHaveLength(3);
+    expect(history.past[0]?.action).toBe("State 1");
+    expect(history.past[1]?.action).toBe("State 2");
+    expect(history.past[2]?.action).toBe("State 4");
+  });
+
+  it("should maintain correct state after complex undo/redo sequence", () => {
+    let history = createGameHistory();
+    const states = Array.from({ length: 10 }, (_, i) => ({
+      ...createGame({ playerCount: 2, difficulty: 4 }),
+      turnNumber: i + 1,
+    }));
+
+    // Build history
+    for (const state of states) {
+      history = pushState(history, state, `Turn ${state.turnNumber}`);
+    }
+
+    expect(history.past).toHaveLength(10);
+    expect(history.currentIndex).toBe(9);
+
+    // Undo 5 times
+    for (let i = 0; i < 5; i++) {
+      const result = undo(history);
+      if (result) history = result.history;
+    }
+
+    expect(history.currentIndex).toBe(4);
+
+    // Redo 3 times
+    for (let i = 0; i < 3; i++) {
+      const result = redo(history);
+      if (result) history = result.history;
+    }
+
+    expect(history.currentIndex).toBe(7);
+
+    // Undo 2 times
+    for (let i = 0; i < 2; i++) {
+      const result = undo(history);
+      if (result) history = result.history;
+    }
+
+    expect(history.currentIndex).toBe(5);
+    expect(history.past).toHaveLength(10);
   });
 });
