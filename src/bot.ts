@@ -364,8 +364,8 @@ export class HeuristicBot implements Bot {
       case "shuttle-flight":
       case "operations-expert-move":
         return `Moving to ${actionParts[1]} (score: ${score.toFixed(1)}) - strategic positioning`;
-      case "share-give":
-      case "share-take":
+      case "share-knowledge-give":
+      case "share-knowledge-take":
         return `Sharing knowledge (score: ${score.toFixed(1)}) - helps progress toward cure`;
       case "event":
         return `Playing event card (score: ${score.toFixed(1)}) - special ability`;
@@ -405,8 +405,8 @@ export class HeuristicBot implements Bot {
         score += this.scoreBuildAction(state, currentPlayer);
         break;
 
-      case "share-give":
-      case "share-take":
+      case "share-knowledge-give":
+      case "share-knowledge-take":
         score += this.scoreShareAction(state, currentPlayer, action);
         break;
 
@@ -571,7 +571,7 @@ export class HeuristicBot implements Bot {
     let score = this.weights.cureProgress * 3;
 
     // Bonus for Researcher (can give any card)
-    if (player.role === Role.Researcher && action.startsWith("share-give:")) {
+    if (player.role === Role.Researcher && action.startsWith("share-knowledge-give:")) {
       score += this.weights.roleSynergy * 4;
     }
 
@@ -787,10 +787,12 @@ export class PriorityBot implements Bot {
     }
 
     // Priority 5: Share knowledge if at location with another player and have matching card
-    const shareActions = nonEventActions.filter((action) => action.startsWith("share-"));
+    const shareActions = nonEventActions.filter((action) => action.startsWith("share-knowledge-"));
     if (shareActions.length > 0) {
       // Prefer giving cards that help other players get closer to cures
-      const giveActions = shareActions.filter((action) => action.startsWith("share-give:"));
+      const giveActions = shareActions.filter((action) =>
+        action.startsWith("share-knowledge-give:"),
+      );
       if (giveActions.length > 0) {
         return giveActions[0] ?? shareActions[0] ?? "";
       }

@@ -709,6 +709,26 @@ describe("HeuristicBot", () => {
         hand: [],
       };
 
+      // Clear cubes from both cities so infection discard is the deciding factor
+      if (state.board["Chicago"]) {
+        state.board["Chicago"] = {
+          ...state.board["Chicago"],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
+      if (state.board["Washington"]) {
+        state.board["Washington"] = {
+          ...state.board["Washington"],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
+
       const actions = ["drive-ferry:Chicago", "drive-ferry:Washington"];
       const chosenAction = bot.chooseAction(state, actions);
 
@@ -733,6 +753,17 @@ describe("HeuristicBot", () => {
         hand: [oneQuietNightCard],
       };
 
+      // Clear all cubes from Chicago to ensure movement doesn't score higher
+      if (state.board["Chicago"]) {
+        state.board["Chicago"] = {
+          ...state.board["Chicago"],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
+
       const actions = ["event:one-quiet-night", "drive-ferry:Chicago"];
       const chosenAction = bot.chooseAction(state, actions);
 
@@ -753,6 +784,17 @@ describe("HeuristicBot", () => {
         location: "Chicago",
         hand: [{ type: "city", city: "Chicago", color: Disease.Blue }],
       };
+
+      // Clear all cubes from Atlanta to ensure movement doesn't score higher
+      if (state.board["Atlanta"]) {
+        state.board["Atlanta"] = {
+          ...state.board["Atlanta"],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
 
       const actions = ["build", "drive-ferry:Atlanta"];
       const chosenAction = bot.chooseAction(state, actions);
@@ -1138,6 +1180,17 @@ describe("PriorityBot", () => {
         hand: blueCards,
       };
 
+      // Clear cubes from Chicago to ensure treat action isn't prioritized
+      if (state.board["Chicago"]) {
+        state.board["Chicago"] = {
+          ...state.board["Chicago"],
+          blue: 0,
+          yellow: 0,
+          black: 0,
+          red: 0,
+        };
+      }
+
       const actions = getAvailableActions(state);
       const chosenAction = bot.chooseAction(state, actions);
 
@@ -1180,7 +1233,7 @@ describe("PriorityBot", () => {
       const chosenAction = bot.chooseAction(state, actions);
 
       // Should share the Atlanta card
-      expect(chosenAction).toMatch(/^share-give:1:Atlanta$/);
+      expect(chosenAction).toMatch(/^share-knowledge-give:1:Atlanta$/);
     });
 
     it("should play One Quiet Night when infection rate is high", () => {

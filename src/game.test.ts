@@ -1401,8 +1401,8 @@ describe("getAvailableActions", () => {
 
     const actions = getAvailableActions(game);
 
-    // Should have share-give action (give Atlanta card to player 1)
-    expect(actions).toContain("share-give:1:Atlanta");
+    // Should have share-knowledge-give action (give Atlanta card to player 1)
+    expect(actions).toContain("share-knowledge-give:1:Atlanta");
   });
 
   it("should include discover cure when at research station with enough cards", () => {

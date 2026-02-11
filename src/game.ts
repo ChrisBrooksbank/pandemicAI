@@ -408,8 +408,8 @@ export function getCurrentPlayer(state: GameState): Player {
  * - "shuttle-flight:Atlanta"
  * - "build-research-station"
  * - "treat:blue"
- * - "share-give:1:Paris" (give Paris card to player 1)
- * - "share-take:1:Paris" (take Paris card from player 1)
+ * - "share-knowledge-give:1:Paris" (give Paris card to player 1)
+ * - "share-knowledge-take:1:Paris" (take Paris card from player 1)
  * - "discover-cure:blue"
  * - "dispatcher-move-to-pawn:1:2" (move player 1 to player 2's location)
  * - "dispatcher-move-other:1:drive:Paris" (move player 1 via drive to Paris)
@@ -528,7 +528,7 @@ export function getAvailableActions(state: GameState): string[] {
         // Researcher can give any city card
         for (const card of currentPlayer.hand) {
           if (card.type === "city" && otherPlayer.hand.length < 7) {
-            actions.push(`share-give:${i}:${card.city}`);
+            actions.push(`share-knowledge-give:${i}:${card.city}`);
           }
         }
       } else {
@@ -537,7 +537,7 @@ export function getAvailableActions(state: GameState): string[] {
           (card) => card.type === "city" && card.city === currentLocation,
         );
         if (hasMatchingCard && otherPlayer.hand.length < 7) {
-          actions.push(`share-give:${i}:${currentLocation}`);
+          actions.push(`share-knowledge-give:${i}:${currentLocation}`);
         }
       }
 
@@ -546,7 +546,7 @@ export function getAvailableActions(state: GameState): string[] {
         (card) => card.type === "city" && card.city === currentLocation,
       );
       if (otherHasMatchingCard && currentPlayer.hand.length < 7) {
-        actions.push(`share-take:${i}:${currentLocation}`);
+        actions.push(`share-knowledge-take:${i}:${currentLocation}`);
       }
     }
   }

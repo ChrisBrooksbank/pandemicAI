@@ -3025,9 +3025,18 @@ describe("Integration Tests - Complete Game Flows", () => {
         updatedPlayers[0] = { ...scientist, hand: [...scientist.hand, ...blueCards] };
       }
 
+      // Ensure at least one blue cube exists on the board to prevent immediate eradication
+      // Place it in a city far from Atlanta to avoid Medic passive ability interference
+      const updatedBoard = { ...state.board };
+      const paris = updatedBoard["Paris"];
+      if (paris) {
+        updatedBoard["Paris"] = { ...paris, [Disease.Blue]: 1 };
+      }
+
       (game as unknown as { gameState: GameState }).gameState = {
         ...state,
         players: updatedPlayers,
+        board: updatedBoard,
       };
 
       // Scientist discovers cure with 4 cards

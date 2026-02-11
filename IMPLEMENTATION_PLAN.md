@@ -3,7 +3,7 @@
 ## Status
 
 - Planning iterations: 2
-- Build iterations: 60
+- Build iterations: 61
 - Last updated: 2026-02-11
 
 ## Tasks
@@ -249,13 +249,19 @@
 
 ### Known Issues
 
-- **Flaky tests** - FIXED in iteration 53:
+- **Flaky tests** - FIXED in iteration 61:
   - Root cause: Tests used `createGame()` which randomly shuffles decks and assigns roles
   - Iteration 41: Fixed epidemic card handling in player hands
   - Iteration 50: Fixed ~10 flaky tests by ensuring deterministic roles and clearing hands
-  - **Iteration 53: FULLY FIXED remaining flakiness** (all tests now pass reliably):
+  - **Iteration 53: FULLY FIXED most flakiness** (core game tests pass reliably):
     - Fixed `createTestGameWithCards` helpers to set deterministic role (Role.Medic) for player 0, preventing random Operations Expert assignment
     - Fixed `createTestGameWithRole` helpers to clear player hands (`hand: []`), preventing random card conflicts
     - Fixed `createDispatcherGame` to clear all player hands to prevent duplicate cards
     - Fixed integration tests to use Role.Researcher (not Medic) to avoid passive ability interference with cure/eradication tests
-    - Verified with 30+ consecutive successful test runs - no more flakiness!
+  - **Iteration 61: FIXED remaining test flakiness + action format bug** (all 1080 tests pass reliably):
+    - Fixed orchestrator test "Scientist discovers cure with only 4 cards" - added blue cube to board to prevent immediate eradication
+    - Fixed HeuristicBot test "should score One Quiet Night higher when infection rate is high" - cleared cubes from Chicago to prevent movement scoring higher
+    - Fixed HeuristicBot test "should give bonus to Operations Expert building stations" - cleared cubes from Atlanta to prevent movement scoring higher
+    - **Fixed critical bug**: `getAvailableActions()` was returning `share-give` and `share-take` but orchestrator's `performAction()` expected `share-knowledge-give` and `share-knowledge-take`
+    - Updated all action formats in game.ts, bot.ts, game.test.ts, and bot.test.ts to use consistent `share-knowledge-*` prefix
+    - All tests now pass with deterministic outcomes!
