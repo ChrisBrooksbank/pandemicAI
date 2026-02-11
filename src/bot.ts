@@ -6,6 +6,20 @@ import { CITIES } from "./board";
 import { OrchestratedGame } from "./orchestrator";
 
 /**
+ * Diagnostic information about a bot decision.
+ *
+ * Useful for debugging bot behavior and tuning strategy weights.
+ */
+export interface BotDecision {
+  /** The action that was chosen */
+  action: string;
+  /** Optional human-readable reasoning for the decision */
+  reasoning?: string;
+  /** Optional score breakdown for the chosen action and alternatives */
+  scores?: Record<string, number>;
+}
+
+/**
  * Interface for AI bot players that can play Pandemic autonomously.
  *
  * Bots receive the full game state (same information a human player sees)
@@ -267,9 +281,31 @@ export const DEFAULT_HEURISTIC_WEIGHTS: HeuristicWeights = {
  */
 export class HeuristicBot implements Bot {
   private weights: HeuristicWeights;
+  private enableDiagnostics: boolean;
+  private lastDecision: BotDecision | null = null;
 
-  constructor(weights: HeuristicWeights = DEFAULT_HEURISTIC_WEIGHTS) {
+  constructor(
+    weights: HeuristicWeights = DEFAULT_HEURISTIC_WEIGHTS,
+    enableDiagnostics: boolean = false,
+  ) {
     this.weights = weights;
+    this.enableDiagnostics = enableDiagnostics;
+  }
+
+  /**
+   * Get the last decision made by this bot (if diagnostics are enabled).
+   *
+   * @returns The last BotDecision with score breakdowns, or null if unavailable
+   */
+  getLastDecision(): BotDecision | null {
+    return this.lastDecision;
+  }
+
+  /**
+   * Clear the decision history.
+   */
+  clearDecisionHistory(): void {
+    this.lastDecision = null;
   }
 
   chooseAction(state: GameState, availableActions: string[]): string {
@@ -287,7 +323,55 @@ export class HeuristicBot implements Bot {
     scoredActions.sort((a, b) => b.score - a.score);
 
     const best = scoredActions[0];
-    return best?.action ?? "";
+    const chosenAction = best?.action ?? "";
+
+    // Store decision diagnostics if enabled
+    if (this.enableDiagnostics) {
+      const scores: Record<string, number> = {};
+      for (const { action, score } of scoredActions) {
+        scores[action] = score;
+      }
+
+      const reasoning = this.generateReasoning(state, chosenAction, best?.score ?? 0);
+
+      this.lastDecision = {
+        action: chosenAction,
+        reasoning,
+        scores,
+      };
+    }
+
+    return chosenAction;
+  }
+
+  /**
+   * Generate human-readable reasoning for a chosen action.
+   */
+  private generateReasoning(state: GameState, action: string, score: number): string {
+    const actionParts = action.split(":");
+    const actionType = actionParts[0];
+
+    switch (actionType) {
+      case "treat":
+        return `Treating disease (score: ${score.toFixed(1)}) - reduces immediate threat`;
+      case "discover-cure":
+        return `Discovering cure (score: ${score.toFixed(1)}) - critical for winning`;
+      case "build":
+        return `Building research station (score: ${score.toFixed(1)}) - improves access for cures`;
+      case "drive-ferry":
+      case "direct-flight":
+      case "charter-flight":
+      case "shuttle-flight":
+      case "operations-expert-move":
+        return `Moving to ${actionParts[1]} (score: ${score.toFixed(1)}) - strategic positioning`;
+      case "share-give":
+      case "share-take":
+        return `Sharing knowledge (score: ${score.toFixed(1)}) - helps progress toward cure`;
+      case "event":
+        return `Playing event card (score: ${score.toFixed(1)}) - special ability`;
+      default:
+        return `Action: ${action} (score: ${score.toFixed(1)})`;
+    }
   }
 
   private scoreAction(state: GameState, action: string): number {

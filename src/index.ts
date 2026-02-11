@@ -93,6 +93,7 @@ export {
 } from "./orchestrator";
 export {
   type Bot,
+  type BotDecision,
   type BotPlayerConfig,
   RandomBot,
   PriorityBot,

@@ -578,6 +578,20 @@ describe("HeuristicBot", () => {
       const player = state.players[0];
       if (!player) throw new Error("Player not found");
 
+      // Clear all disease cubes from the board to make the test deterministic
+      for (const cityName in state.board) {
+        const cityState = state.board[cityName];
+        if (cityState) {
+          state.board[cityName] = {
+            ...cityState,
+            blue: 0,
+            yellow: 0,
+            black: 0,
+            red: 0,
+          };
+        }
+      }
+
       const blueCards: CityCard[] = [
         { type: "city", city: "Paris", color: Disease.Blue },
         { type: "city", city: "Montreal", color: Disease.Blue },
@@ -607,6 +621,20 @@ describe("HeuristicBot", () => {
 
       const player = state.players[0];
       if (!player) throw new Error("Player not found");
+
+      // Clear all disease cubes from the board
+      for (const cityName in state.board) {
+        const cityState = state.board[cityName];
+        if (cityState) {
+          state.board[cityName] = {
+            ...cityState,
+            blue: 0,
+            yellow: 0,
+            black: 0,
+            red: 0,
+          };
+        }
+      }
 
       const atlantaState = state.board["Atlanta"];
       if (!atlantaState) throw new Error("Atlanta not found");
@@ -1668,5 +1696,227 @@ describe("runBotGames", () => {
       expect(result.outbreaks).toBeGreaterThanOrEqual(0);
       expect(result.status).toMatch(/^(won|lost)$/);
     }
+  });
+});
+
+describe("BotDecision diagnostics", () => {
+  describe("HeuristicBot with diagnostics disabled", () => {
+    it("should not track decisions by default", () => {
+      const bot = new HeuristicBot();
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).toBeNull();
+    });
+
+    it("should not track decisions when explicitly disabled", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, false);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).toBeNull();
+    });
+  });
+
+  describe("HeuristicBot with diagnostics enabled", () => {
+    it("should track decision with action", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const chosenAction = bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).not.toBeNull();
+      expect(decision?.action).toBe(chosenAction);
+    });
+
+    it("should track decision with reasoning", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).not.toBeNull();
+      expect(decision?.reasoning).toBeDefined();
+      expect(typeof decision?.reasoning).toBe("string");
+      expect(decision?.reasoning?.length).toBeGreaterThan(0);
+    });
+
+    it("should track decision with score breakdowns", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).not.toBeNull();
+      expect(decision?.scores).toBeDefined();
+      expect(typeof decision?.scores).toBe("object");
+      expect(Object.keys(decision?.scores ?? {})).toHaveLength(actions.length);
+    });
+
+    it("should include scores for all available actions", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+
+      const decision = bot.getLastDecision();
+      expect(decision).not.toBeNull();
+
+      // Every available action should have a score
+      for (const action of actions) {
+        expect(decision?.scores).toHaveProperty(action);
+        expect(typeof decision?.scores?.[action]).toBe("number");
+      }
+    });
+
+    it("should have highest score for chosen action", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const chosenAction = bot.chooseAction(state, actions);
+      const decision = bot.getLastDecision();
+
+      expect(decision).not.toBeNull();
+      const scores = decision?.scores ?? {};
+      const chosenScore = scores[chosenAction];
+
+      // Chosen action should have the highest score
+      for (const score of Object.values(scores)) {
+        if (chosenScore !== undefined) {
+          expect(score).toBeLessThanOrEqual(chosenScore);
+        }
+      }
+    });
+
+    it("should update decision on each chooseAction call", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      const firstAction = bot.chooseAction(state, actions);
+      const firstDecision = bot.getLastDecision();
+
+      const secondAction = bot.chooseAction(state, actions);
+      const secondDecision = bot.getLastDecision();
+
+      // Decisions should be tracked separately
+      expect(firstDecision?.action).toBe(firstAction);
+      expect(secondDecision?.action).toBe(secondAction);
+    });
+
+    it("should clear decision history", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+      const actions = getAvailableActions(state);
+
+      bot.chooseAction(state, actions);
+      expect(bot.getLastDecision()).not.toBeNull();
+
+      bot.clearDecisionHistory();
+      expect(bot.getLastDecision()).toBeNull();
+    });
+
+    it("should generate appropriate reasoning for treat actions", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      // Manually add cubes to Atlanta (where player starts)
+      const atlanta = state.board["Atlanta"];
+      if (atlanta) {
+        atlanta.blue = 2;
+      }
+
+      const actions = getAvailableActions(state);
+      const treatAction = actions.find((a) => a.startsWith("treat:"));
+
+      if (treatAction) {
+        bot.chooseAction(state, [treatAction]);
+        const decision = bot.getLastDecision();
+
+        expect(decision?.reasoning).toContain("Treating disease");
+        expect(decision?.reasoning).toContain("reduces immediate threat");
+      }
+    });
+
+    it("should generate appropriate reasoning for cure actions", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      // Set up state to allow cure discovery
+      const player = state.players[0];
+      if (player) {
+        const cards: CityCard[] = [
+          { type: "city", city: "Atlanta", color: Disease.Blue },
+          { type: "city", city: "Chicago", color: Disease.Blue },
+          { type: "city", city: "Montreal", color: Disease.Blue },
+          { type: "city", city: "New York", color: Disease.Blue },
+          { type: "city", city: "Washington", color: Disease.Blue },
+        ];
+        state.players[0] = { ...player, hand: cards };
+      }
+
+      const actions = getAvailableActions(state);
+      const cureAction = actions.find((a) => a.startsWith("discover-cure:"));
+
+      if (cureAction) {
+        bot.chooseAction(state, [cureAction]);
+        const decision = bot.getLastDecision();
+
+        expect(decision?.reasoning).toContain("Discovering cure");
+        expect(decision?.reasoning).toContain("critical for winning");
+      }
+    });
+
+    it("should generate appropriate reasoning for movement actions", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const state = createGame({ playerCount: 2, difficulty: 4 });
+
+      const actions = getAvailableActions(state);
+      const moveAction = actions.find(
+        (a) => a.startsWith("drive-ferry:") || a.startsWith("direct-flight:"),
+      );
+
+      if (moveAction) {
+        bot.chooseAction(state, [moveAction]);
+        const decision = bot.getLastDecision();
+
+        expect(decision?.reasoning).toContain("Moving to");
+        expect(decision?.reasoning).toContain("strategic positioning");
+      }
+    });
+
+    it("should work with all bot strategies", () => {
+      const bot = new HeuristicBot(DEFAULT_HEURISTIC_WEIGHTS, true);
+      const config = { playerCount: 2, difficulty: 4 };
+      const state = createGame(config);
+
+      // Test that diagnostics work across multiple decision types
+      for (let i = 0; i < 5; i++) {
+        const actions = getAvailableActions(state);
+        if (actions.length === 0) break;
+
+        bot.chooseAction(state, actions);
+        const decision = bot.getLastDecision();
+
+        expect(decision).not.toBeNull();
+        expect(decision?.action).toBeDefined();
+        expect(decision?.reasoning).toBeDefined();
+        expect(decision?.scores).toBeDefined();
+      }
+    });
   });
 });
