@@ -18,6 +18,10 @@ import {
   redo,
   canUndo,
   canRedo,
+  createReplay,
+  exportReplay,
+  importReplay,
+  ReplayImportError,
 } from "./serialization";
 import { createGame } from "./game";
 import { GameState, Disease, Role, CureStatus, TurnPhase } from "./types";
@@ -1262,5 +1266,341 @@ describe("undo/redo integration", () => {
 
     expect(history.currentIndex).toBe(5);
     expect(history.past).toHaveLength(10);
+  });
+});
+
+describe("exportReplay", () => {
+  it("should export a replay to a JSON string", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...initialState, turnNumber: 2 };
+    const state3 = { ...initialState, turnNumber: 3 };
+
+    const replay = createReplay(initialState, [
+      { action: "Drive to Paris", result: state2 },
+      { action: "Treat disease", result: state3 },
+    ]);
+
+    const json = exportReplay(replay);
+
+    expect(typeof json).toBe("string");
+    expect(() => JSON.parse(json)).not.toThrow();
+  });
+
+  it("should export a replay with proper formatting (pretty-printed)", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const replay = createReplay(initialState, []);
+
+    const json = exportReplay(replay);
+
+    // Check that the JSON is pretty-printed (contains newlines and indentation)
+    expect(json).toContain("\n");
+    expect(json).toContain("  ");
+  });
+
+  it("should include all replay data in the exported JSON", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...initialState, turnNumber: 2 };
+
+    const replay = createReplay(initialState, [{ action: "Test action", result: state2 }]);
+
+    const json = exportReplay(replay);
+    const parsed = JSON.parse(json);
+
+    expect(parsed.initialState).toBeDefined();
+    expect(parsed.actions).toBeDefined();
+    expect(parsed.metadata).toBeDefined();
+    expect(parsed.actions).toHaveLength(1);
+    expect(parsed.actions[0].action).toBe("Test action");
+  });
+
+  it("should export replay metadata correctly", () => {
+    const initialState = createGame({ playerCount: 3, difficulty: 5 });
+    const replay = createReplay(initialState, []);
+
+    const json = exportReplay(replay);
+    const parsed = JSON.parse(json);
+
+    expect(parsed.metadata.playerRoles).toHaveLength(3);
+    expect(parsed.metadata.difficulty).toBe(5);
+    expect(parsed.metadata.finalOutcome).toBeDefined();
+    expect(parsed.metadata.totalTurns).toBeDefined();
+    expect(parsed.metadata.timestamp).toBeDefined();
+  });
+});
+
+describe("importReplay", () => {
+  it("should import an exported replay with perfect fidelity", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const state2 = { ...initialState, turnNumber: 2 };
+
+    const original = createReplay(initialState, [{ action: "Test action", result: state2 }]);
+
+    const json = exportReplay(original);
+    const imported = importReplay(json);
+
+    expect(imported).toEqual(original);
+  });
+
+  it("should handle round-trip export/import multiple times", () => {
+    const initialState = createGame({ playerCount: 3, difficulty: 5 });
+    const state2 = { ...initialState, turnNumber: 2 };
+    const state3 = { ...initialState, turnNumber: 3 };
+
+    const replay1 = createReplay(initialState, [
+      { action: "Action 1", result: state2 },
+      { action: "Action 2", result: state3 },
+    ]);
+
+    // Export, import, export, import
+    const json1 = exportReplay(replay1);
+    const replay2 = importReplay(json1);
+    const json2 = exportReplay(replay2);
+    const replay3 = importReplay(json2);
+
+    expect(replay3).toEqual(replay1);
+  });
+
+  it("should throw ReplayImportError for invalid JSON", () => {
+    const invalidJson = "{ this is not valid json }";
+
+    expect(() => importReplay(invalidJson)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalidJson)).toThrow("Invalid JSON");
+  });
+
+  it("should throw ReplayImportError for non-object data", () => {
+    const jsonString = JSON.stringify("just a string");
+
+    expect(() => importReplay(jsonString)).toThrow(ReplayImportError);
+    expect(() => importReplay(jsonString)).toThrow("not an object");
+  });
+
+  it("should throw ReplayImportError for null data", () => {
+    const jsonNull = JSON.stringify(null);
+
+    expect(() => importReplay(jsonNull)).toThrow(ReplayImportError);
+    expect(() => importReplay(jsonNull)).toThrow("not an object");
+  });
+
+  it("should throw ReplayImportError for missing initialState", () => {
+    const invalid = JSON.stringify({
+      actions: [],
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("initialState");
+  });
+
+  it("should throw ReplayImportError for missing actions", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("actions");
+  });
+
+  it("should throw ReplayImportError for non-array actions", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: "not an array",
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("actions array");
+  });
+
+  it("should throw ReplayImportError for missing metadata", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("metadata");
+  });
+
+  it("should throw ReplayImportError for invalid action structure", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [{ action: "Valid", result: initialState }, "not an object"],
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("Action at index 1");
+  });
+
+  it("should throw ReplayImportError for action missing action string", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [{ result: initialState }],
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("missing action string");
+  });
+
+  it("should throw ReplayImportError for action missing result state", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [{ action: "Test" }],
+      metadata: {
+        playerRoles: [],
+        difficulty: 4,
+        finalOutcome: "ongoing",
+        totalTurns: 1,
+        timestamp: Date.now(),
+      },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("missing result state");
+  });
+
+  it("should throw ReplayImportError for missing metadata.playerRoles", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+      metadata: { difficulty: 4, finalOutcome: "ongoing", totalTurns: 1, timestamp: Date.now() },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("playerRoles");
+  });
+
+  it("should throw ReplayImportError for missing metadata.difficulty", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+      metadata: { playerRoles: [], finalOutcome: "ongoing", totalTurns: 1, timestamp: Date.now() },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("difficulty");
+  });
+
+  it("should throw ReplayImportError for missing metadata.finalOutcome", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+      metadata: { playerRoles: [], difficulty: 4, totalTurns: 1, timestamp: Date.now() },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("finalOutcome");
+  });
+
+  it("should throw ReplayImportError for missing metadata.totalTurns", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+      metadata: { playerRoles: [], difficulty: 4, finalOutcome: "ongoing", timestamp: Date.now() },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("totalTurns");
+  });
+
+  it("should throw ReplayImportError for missing metadata.timestamp", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const invalid = JSON.stringify({
+      initialState,
+      actions: [],
+      metadata: { playerRoles: [], difficulty: 4, finalOutcome: "ongoing", totalTurns: 1 },
+    });
+
+    expect(() => importReplay(invalid)).toThrow(ReplayImportError);
+    expect(() => importReplay(invalid)).toThrow("timestamp");
+  });
+
+  it("should successfully import a replay with multiple actions", () => {
+    const initialState = createGame({ playerCount: 2, difficulty: 4 });
+    const states = Array.from({ length: 5 }, (_, i) => ({
+      ...initialState,
+      turnNumber: i + 1,
+    }));
+
+    const actions = states.map((state, i) => ({
+      action: `Action ${i + 1}`,
+      result: state,
+    }));
+
+    const original = createReplay(initialState, actions);
+    const json = exportReplay(original);
+    const imported = importReplay(json);
+
+    expect(imported.actions).toHaveLength(5);
+    expect(imported.actions[0]?.action).toBe("Action 1");
+    expect(imported.actions[4]?.action).toBe("Action 5");
+  });
+
+  it("should preserve complex game state through export/import", () => {
+    const initialState = createGame({ playerCount: 4, difficulty: 6 });
+    // Modify the state to have some interesting data
+    const modifiedState = {
+      ...initialState,
+      turnNumber: 5,
+      outbreakCount: 3,
+      cures: {
+        ...initialState.cures,
+        [Disease.Blue]: "cured" as const,
+        [Disease.Yellow]: "eradicated" as const,
+      },
+    };
+
+    const replay = createReplay(initialState, [
+      { action: "Complex action", result: modifiedState },
+    ]);
+    const json = exportReplay(replay);
+    const imported = importReplay(json);
+
+    expect(imported.actions[0]?.result.turnNumber).toBe(5);
+    expect(imported.actions[0]?.result.outbreakCount).toBe(3);
+    expect(imported.actions[0]?.result.cures[Disease.Blue]).toBe("cured");
+    expect(imported.actions[0]?.result.cures[Disease.Yellow]).toBe("eradicated");
   });
 });

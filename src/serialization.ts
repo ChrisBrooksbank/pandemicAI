@@ -888,6 +888,107 @@ export function finishReplay(
 }
 
 /**
+ * Exports a game replay to a JSON string for sharing
+ * @param replay - The game replay to export
+ * @returns JSON string representation of the replay
+ */
+export function exportReplay(replay: GameReplay): string {
+  return JSON.stringify(replay, null, 2);
+}
+
+/**
+ * Error thrown when replay import fails
+ */
+export class ReplayImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReplayImportError";
+  }
+}
+
+/**
+ * Imports a game replay from a JSON string
+ * @param json - The JSON string to import
+ * @returns The reconstructed GameReplay object
+ * @throws {ReplayImportError} If the JSON is malformed or invalid
+ */
+export function importReplay(json: string): GameReplay {
+  let parsed: unknown;
+
+  // Step 1: Parse JSON
+  try {
+    parsed = JSON.parse(json);
+  } catch (error) {
+    throw new ReplayImportError(
+      `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  // Step 2: Validate basic structure
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new ReplayImportError("Imported data is not an object");
+  }
+
+  const data = parsed as Record<string, unknown>;
+
+  // Step 3: Validate required fields
+  if (typeof data.initialState !== "object" || data.initialState === null) {
+    throw new ReplayImportError("Missing or invalid initialState");
+  }
+
+  if (!Array.isArray(data.actions)) {
+    throw new ReplayImportError("Missing or invalid actions array");
+  }
+
+  if (typeof data.metadata !== "object" || data.metadata === null) {
+    throw new ReplayImportError("Missing or invalid metadata");
+  }
+
+  // Step 4: Validate actions array structure
+  for (let i = 0; i < data.actions.length; i++) {
+    const action = data.actions[i];
+    if (typeof action !== "object" || action === null) {
+      throw new ReplayImportError(`Action at index ${i} is not an object`);
+    }
+
+    const actionObj = action as Record<string, unknown>;
+    if (typeof actionObj.action !== "string") {
+      throw new ReplayImportError(`Action at index ${i} missing action string`);
+    }
+
+    if (typeof actionObj.result !== "object" || actionObj.result === null) {
+      throw new ReplayImportError(`Action at index ${i} missing result state`);
+    }
+  }
+
+  // Step 5: Validate metadata structure
+  const metadata = data.metadata as Record<string, unknown>;
+  if (!Array.isArray(metadata.playerRoles)) {
+    throw new ReplayImportError("Metadata missing or invalid playerRoles array");
+  }
+
+  if (typeof metadata.difficulty !== "number") {
+    throw new ReplayImportError("Metadata missing or invalid difficulty");
+  }
+
+  if (typeof metadata.finalOutcome !== "string") {
+    throw new ReplayImportError("Metadata missing or invalid finalOutcome");
+  }
+
+  if (typeof metadata.totalTurns !== "number") {
+    throw new ReplayImportError("Metadata missing or invalid totalTurns");
+  }
+
+  if (typeof metadata.timestamp !== "number") {
+    throw new ReplayImportError("Metadata missing or invalid timestamp");
+  }
+
+  // If validation passes, return the replay
+  // TypeScript will trust our validation here
+  return data as unknown as GameReplay;
+}
+
+/**
  * Filesystem-based storage backend for Node.js environments
  * Uses Node.js fs module to persist game saves to disk
  */

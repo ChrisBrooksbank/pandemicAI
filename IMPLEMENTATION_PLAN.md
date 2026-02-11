@@ -171,7 +171,7 @@
 - [x] Implement GameReplay type (initial state + action sequence)
 - [x] Implement replayStep(), replayForward(), replayBackward() for step-by-step replay
 - [x] Add replay recording during live games (opt-in)
-- [ ] Add JSON export/import for replay sharing
+- [x] Add JSON export/import for replay sharing
 - [ ] Add unit tests for serialization round-trip fidelity
 - [ ] Add integration tests for save/load, undo/redo, and replay workflows
 
